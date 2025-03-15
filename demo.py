@@ -1,94 +1,86 @@
 import simpy
-import matplotlib.pyplot as plt
-import matplotlib.animation as animation
 from ortools.sat.python import cp_model
 import numpy as np
 
 
 class LacquerOptimization:
-    def __init__(self, num_frames, bath_times, travel_times):
+    def __init__(self, num_frames, num_manipulators, bath_data, manipulator_data):
         self.model = cp_model.CpModel()
         self.num_frames = num_frames
-        self.bath_times = bath_times
-        self.travel_times = travel_times
+        self.num_manipulators = num_manipulators
+        self.bath_data = bath_data  # List of dicts with bath details
+        self.manipulator_data = manipulator_data  # Dict with movement constraints
         self.start_times = {}
+        self.travel_times = {bath['id']: bath['transfer_time'] for bath in bath_data}
+
+        # Define decision variables for when each frame enters each bath
         for f in range(num_frames):
-            for b in range(len(bath_times)):
-                self.start_times[(f, b)] = self.model.NewIntVar(0, 1000, f"start_f{f}_b{b}")
+            for bath in bath_data:
+                self.start_times[(f, bath['id'])] = self.model.NewIntVar(0, 10000, f"start_f{f}_b{bath['id']}")
+
+        # Ensure sequence constraints per frame
         for f in range(num_frames):
-            for b in range(1, len(bath_times)):
-                self.model.Add(self.start_times[(f, b)] >= self.start_times[(f, b - 1)] + bath_times[b - 1])
-                self.model.Add(self.start_times[(f, b)] >= self.start_times[(f, b - 1)] + travel_times[b - 1])
-        self.takt_time = self.model.NewIntVar(0, 1000, "takt_time")
+            for i in range(1, len(bath_data)):
+                prev_bath = bath_data[i - 1]['id']
+                curr_bath = bath_data[i]['id']
+                self.model.Add(
+                    self.start_times[(f, curr_bath)] >= self.start_times[(f, prev_bath)] + bath_data[i - 1]['min_time'])
+                self.model.Add(
+                    self.start_times[(f, curr_bath)] >= self.start_times[(f, prev_bath)] + self.travel_times[prev_bath])
+
+        # Manipulator constraints (avoiding collisions)
+        for b in bath_data:
+            for f1 in range(num_frames):
+                for f2 in range(f1 + 1, num_frames):
+                    self.model.AddAbsEquality(
+                        self.start_times[(f1, b['id'])] - self.start_times[(f2, b['id'])],
+                        self.model.NewIntVar(0, 10000, f"diff_f{f1}_f{f2}_b{b['id']}")
+                    )
+
+        # Objective function: minimize overall takt time
+        self.takt_time = self.model.NewIntVar(0, 10000, "takt_time")
         for f in range(num_frames):
-            self.model.Add(self.takt_time >= self.start_times[(f, len(bath_times) - 1)] + bath_times[-1])
+            last_bath_id = bath_data[-1]['id']
+            self.model.Add(self.takt_time >= self.start_times[(f, last_bath_id)] + bath_data[-1]['max_time'])
         self.model.Minimize(self.takt_time)
 
     def solve(self):
         solver = cp_model.CpSolver()
         status = solver.Solve(self.model)
-        if status == cp_model.OPTIMAL or status == cp_model.FEASIBLE:
-            schedule = {f: [(b, solver.Value(self.start_times[(f, b)])) for b in range(len(self.bath_times))] for f in
+        if status in [cp_model.OPTIMAL, cp_model.FEASIBLE]:
+            schedule = {f: [(b['id'], solver.Value(self.start_times[(f, b['id'])])) for b in self.bath_data] for f in
                         range(self.num_frames)}
             return schedule, solver.Value(self.takt_time)
         return None, None
 
 
-class LacquerSimulation:
-    def __init__(self, env, schedule, bath_times, update_func):
-        self.env = env
-        self.schedule = schedule
-        self.bath_times = bath_times
-        self.update_func = update_func
+# Example Data
+bath_data = [
+    {"id": 1, "name": "Entry", "min_time": 0, "max_time": 0, "drip_time": 0, "transfer_time": 0},
+    {"id": 2, "name": "Hot Rinse", "min_time": 360, "max_time": 360, "drip_time": 30, "transfer_time": 2752},
+    {"id": 3, "name": "Spray Degreasing", "min_time": 352, "max_time": 360, "drip_time": 30, "transfer_time": 3264},
+    {"id": 4, "name": "Degreasing I", "min_time": 344, "max_time": 360, "drip_time": 30, "transfer_time": 3610},
+]
 
-    def frame_process(self, frame_id):
-        for bath_id, start_time in self.schedule[frame_id]:
-            yield self.env.timeout(start_time - self.env.now)
-            self.update_func(frame_id, bath_id, self.env.now)
-            yield self.env.timeout(self.bath_times[bath_id])
-
-    def run(self):
-        for frame_id in self.schedule:
-            self.env.process(self.frame_process(frame_id))
-
-
-def visualize_simulation(schedule, bath_times):
-    fig, ax = plt.subplots()
-    num_frames = len(schedule)
-    num_baths = len(bath_times)
-    positions = {f: -1 for f in schedule}
-    colors = plt.cm.viridis(np.linspace(0, 1, num_frames))
-    bars = [ax.barh(f, 1, left=0, color=colors[f]) for f in range(num_frames)]
-
-    def update(frame_id, bath_id, time):
-        positions[frame_id] = bath_id
-
-    def animate(i):
-        for f in range(num_frames):
-            bars[f][0].set_x(positions[f])
-
-    env = simpy.Environment()
-    simulation = LacquerSimulation(env, schedule, bath_times, update)
-    simulation.run()
-    env.run()
-    ani = animation.FuncAnimation(fig, animate, frames=100, interval=200)
-    ax.set_xlim(-1, num_baths)
-    ax.set_ylim(-1, num_frames)
-    ax.set_xlabel("Bath ID")
-    ax.set_ylabel("Frame ID")
-    ax.set_title("Lacquer Line Simulation")
-    plt.show()
-
+manipulator_data = {
+    "speed_m_per_s": 0.583,
+    "lift_speed_m_per_s": 0.2,
+    "acceleration_s": 2,
+    "lift_acceleration_s": 1,
+    "zones": {
+        1: ["Entry", "Operation 3"],
+        2: ["Operation 3", "Operation 7"],
+        3: ["Operation 7", "Operation 11"]
+    }
+}
 
 if __name__ == "__main__":
     num_frames = 3
-    bath_times = [90, 120, 180]
-    travel_times = [20, 30, 40]
-    optimizer = LacquerOptimization(num_frames, bath_times, travel_times)
+    num_manipulators = 3
+    optimizer = LacquerOptimization(num_frames, num_manipulators, bath_data, manipulator_data)
     schedule, takt_time = optimizer.solve()
     if schedule:
         print("Optimal Schedule:", schedule)
         print("Minimum Takt Time:", takt_time)
-        visualize_simulation(schedule, bath_times)
     else:
         print("No feasible schedule found!")
