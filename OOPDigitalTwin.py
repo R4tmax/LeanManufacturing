@@ -1,3 +1,4 @@
+### Object definition
 class Bath:
     next_id = 0  # Class variable for auto-incrementing ID
 
@@ -5,18 +6,29 @@ class Bath:
         self.bathUUID = Bath.next_id  # Assign auto-incremented ID
         Bath.next_id += 1  # Increment for the next instance
         self.name = name
-        self.distanceToStart = distance  # Distance in cm
+        self.distanceToStart = distance  # Distance in m
 
     def __repr__(self):
-        return f"Bath(ID={self.bathUUID}, Name={self.name}, Distance={self.distanceToStart} cm)"
+        return f"Bath(ID={self.bathUUID}, Name={self.name}, Distance={self.distanceToStart} m)"
 
 
 class Manipulator:
-    def __init__(self, uuid, reach, lift, speed):
-        self.ManipUUID = uuid
+    # Constants
+    LIFT_TIME = 16  # Time for lift in seconds (constant)
+    SPEED = 0.6  # Speed of the manipulator (constant, 0.6 m/s)
+
+    next_id = 0  # Class variable for auto-incrementing ID
+
+    def __init__(self, reach, startingPosition):
+        self.ManipUUID = Manipulator.next_id
+        Manipulator.next_id += 1
         self.operatingRange = reach
-        self.liftSpeed = lift
-        self.movementSpeed = speed
+        self.liftTime = Manipulator.LIFT_TIME
+        self.movementSpeed = Manipulator.SPEED
+        self.position = startingPosition
+
+    def __repr__(self):
+        return f"Manipulator(ID={self.ManipUUID}, Located at position: {self.position}, services operations {self.operatingRange}"
 
 
 class Recipe:
@@ -31,6 +43,7 @@ class Carrier:
         self.carUUID = uuid
         self.requiredProcedure = procedure
 
+### Data definition
 
 bathData = [
     ("Vstup do linky", 0),
@@ -56,14 +69,31 @@ bathData = [
     ("UF oplach 1 - ponor", 53073),
     ("UF Oplach 2 - ponor", 55377),
     ("Demi oplach 2 - ponor", 57687),
+    ("Výstup z linky", 60000)
 ]
 
-# Creating the list of Bath objects
+manipData = [
+    ([0,1,2,3,4], 0 ),
+    ([4,5,6,7,8],  5 ),
+    ([8,9,10,11,12], 9 ),
+    ([13,14,15,16,17], 14 ),
+    ([17,18,19,20,21,22,23], 18 )
+]
+
+### Instantiation
 baths = [
-    Bath(name, (distance // 10) // 10)  # Round down to nearest 10, then convert to cm
+    Bath(name, distance / 1000)  # convert to m
     for name, distance in bathData
+]
+
+manipulators = [
+    Manipulator(reach,startingPosition)
+    for reach, startingPosition in manipData
 ]
 
 # Print the list of Bath objects
 for bath in baths:
     print(bath)
+
+for manipulator in manipulators:
+    print(manipulator)
