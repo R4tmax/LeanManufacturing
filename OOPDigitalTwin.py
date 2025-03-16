@@ -36,6 +36,14 @@ class Manipulator:
     def __repr__(self):
         return f"Manipulator(ID={self.ManipUUID}, Located at position: {self.position}, services operations {self.operatingRange}, currently holds the {self.heldCarrier}"
 
+    def move_to(self, new_position):
+        """Move manipulator to a new position."""
+        if new_position in self.operatingRange:
+            print(f"Manipulator {self.ManipUUID} moving from {self.position} to {new_position}")
+            self.position = new_position
+        else:
+            print(f"Manipulator {self.ManipUUID} cannot move to {new_position}, out of range.")
+
 
 class RecipeStep:
     DRIP_TIME = 20 # set to constant for now
@@ -167,3 +175,74 @@ for carrier in work_order:
     print(carrier)
 
 ### Simulation
+# Simulation settings
+SIMULATION_TIME = 300  # Total runtime in seconds (adjust as needed)
+current_time = 0  # Global clock
+
+
+def run_simulation():
+    global current_time
+    while current_time < SIMULATION_TIME:
+        print(f"\nTime: {current_time}s")
+
+        # Step 1: Update all manipulators
+        for manipulator in manipulators:
+            update_manipulator(manipulator)
+
+        # Step 2: Update carriers in baths
+        for bath in baths:
+            if bath.containedCarrier:
+                update_carrier_in_bath(bath)
+
+        # Step 3: Check for next actions
+        assign_new_tasks()
+
+        # Increment time
+        current_time += 1
+        time.sleep(0.1)  # Simulate real-time execution (optional)
+
+
+def update_manipulator(manipulator):
+    """Handle movement, lifting, and releasing operations."""
+    if manipulator.heldCarrier:
+        step = manipulator.heldCarrier.get_current_step()
+        if step and step.bathID == manipulator.position:
+            # Start submersion process
+            if baths[step.bathID].containedCarrier is None:
+                print(
+                    f"Manipulator {manipulator.ManipUUID} submerging Carrier {manipulator.heldCarrier.carUUID} at Bath {step.bathID}")
+                baths[step.bathID].containedCarrier = manipulator.heldCarrier
+                manipulator.heldCarrier = None
+                step.completed = True  # Mark step as complete
+
+
+def update_carrier_in_bath(bath):
+    """Update submersion progress and handle completion."""
+    carrier = bath.containedCarrier
+    step = carrier.get_current_step()
+    if step and not step.completed:
+        step.submersionTime -= 1
+        if step.submersionTime <= 0:
+            print(f"Carrier {carrier.carUUID} finished processing at Bath {bath.bathUUID}")
+            step.completed = True
+            bath.containedCarrier = None  # Carrier is ready for pickup
+            carrier.currentStepIndex += 1  # Move to next step
+
+
+def assign_new_tasks():
+    """Assign free manipulators to waiting carriers."""
+    for manipulator in manipulators:
+        if manipulator.heldCarrier is None:  # Free manipulator
+            for carrier in work_order:
+                step = carrier.get_current_step()
+                if step and not step.completed:
+                    if baths[step.bathID].containedCarrier is None:  # Empty bath
+                        manipulator.move_to(step.bathID)
+                        manipulator.heldCarrier = carrier
+                        print(
+                            f"Manipulator {manipulator.ManipUUID} picking up Carrier {carrier.carUUID} for Bath {step.bathID}")
+                        return  # One task per loop
+
+
+# Run the simulation
+run_simulation()
