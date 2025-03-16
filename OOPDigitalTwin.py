@@ -1,15 +1,20 @@
+from enum import Enum
+import time
+
 ### Object definition
 class Bath:
     next_id = 0  # Class variable for auto-incrementing ID
 
-    def __init__(self, name, distance):
+    def __init__(self, name, distance, submergable=True):
         self.bathUUID = Bath.next_id  # Assign auto-incremented ID
         Bath.next_id += 1  # Increment for the next instance
         self.name = name
         self.distanceToStart = distance  # Distance in m
+        self.containedCarrier = None
+        self.isSubmergable = submergable
 
     def __repr__(self):
-        return f"Bath(ID={self.bathUUID}, Name={self.name}, Distance={self.distanceToStart} m)"
+        return f"Bath(ID={self.bathUUID}, Name={self.name}, Distance={self.distanceToStart} m, currently has {self.containedCarrier} submerged)"
 
 
 class Manipulator:
@@ -26,9 +31,10 @@ class Manipulator:
         self.liftTime = Manipulator.LIFT_TIME
         self.movementSpeed = Manipulator.SPEED
         self.position = starting_position
+        self.heldCarrier = None
 
     def __repr__(self):
-        return f"Manipulator(ID={self.ManipUUID}, Located at position: {self.position}, services operations {self.operatingRange}"
+        return f"Manipulator(ID={self.ManipUUID}, Located at position: {self.position}, services operations {self.operatingRange}, currently holds the {self.heldCarrier}"
 
 
 class RecipeStep:
@@ -65,6 +71,12 @@ class Recipe:
         return f"Recipe(ID={self.recpUUID}, Name={self.name}, Steps={len(self.executionList)})"
 
 
+class ManipulatorState(Enum):
+    IDLE = "Idle"
+    MOVING = "Moving"
+    LIFTING = "Lifting"
+    HOLDING = "Holding"
+
 
 class Carrier:
     next_id = 1
@@ -73,6 +85,7 @@ class Carrier:
         Carrier.next_id += 1   # Unique identifier for the carrier
         self.requiredProcedure = procedure  # The Recipe the carrier follows
         self.currentStepIndex = 0  # Keeps track of the current step in the recipe
+        self.state = ManipulatorState.IDLE  # Default state
 
     def __repr__(self):
         return f"Carrier(ID={self.carUUID}, Current Step: {self.currentStepIndex}, Recipe: {self.requiredProcedure.name})"
@@ -127,13 +140,14 @@ recipe_template2 = RecipeTemplate("Test2", [(0, 0), (5, 400), (10, 300), (23, 0)
 recipe_template3 = RecipeTemplate("Test3", [(0, 0), (6, 400), (17, 300), (23, 0)])
 
 
-
-
 ### Collection Instantiation & readback
 baths = [
     Bath(name, distance / 1000)  # convert to m
     for name, distance in bathData
 ]
+
+baths[0].isSubmergable = False
+baths[-1].isSubmergable = False
 
 manipulators = [
     Manipulator(reach,startingPosition)
@@ -151,3 +165,5 @@ for manipulator in manipulators:
 
 for carrier in work_order:
     print(carrier)
+
+### Simulation
