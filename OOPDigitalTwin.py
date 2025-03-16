@@ -1,8 +1,3 @@
-import uuid
-import copy
-
-
-
 ### Object definition
 class Bath:
     next_id = 0  # Class variable for auto-incrementing ID
@@ -89,12 +84,6 @@ class Carrier:
             return self.requiredProcedure.executionList[self.currentStepIndex]
         return None
 
-#    def force_to_next_step(self):
-#        """Moves the carrier to the next step in the recipe."""
-#        if self.currentStepIndex < len(self.requiredProcedure.executionList):
-#            self.currentStepIndex += 1
-
-
 
 ### Data & condition definition
 
@@ -133,7 +122,9 @@ manipData = [
     ([17,18,19,20,21,22,23], 18 )
 ]
 
-recipe_template1 = RecipeTemplate("Test1", [(0, 100), (5, 120), (10, 30), (23, 0)])
+recipe_template1 = RecipeTemplate("Test1", [(0, 0), (5, 120), (10, 30), (23, 0)])
+recipe_template2 = RecipeTemplate("Test2", [(0, 0), (5, 400), (10, 300), (23, 0)])
+recipe_template3 = RecipeTemplate("Test3", [(0, 0), (6, 400), (17, 300), (23, 0)])
 
 
 
@@ -149,22 +140,7 @@ manipulators = [
     for reach, startingPosition in manipData
 ]
 
-# Create carriers that follow the same recipe but have independent instances
-carrier1 = Carrier(recipe_template1.create_instance())
-carrier2 = Carrier(recipe_template1.create_instance())
-
-# Print out their recipes
-print(carrier1)
-print(carrier2)
-
-# Move Carrier 1 forward
-#carrier1.force_to_next_step()
-
-# Print their steps to verify independence
-#print("Carrier 1 Step:", carrier1.get_current_step())
-#print("Carrier 2 Step:", carrier2.get_current_step())
-
-# work_order = [Carrier()]
+work_order = [Carrier(recipe_template1.create_instance()),Carrier(recipe_template1.create_instance()),Carrier(recipe_template2.create_instance()),Carrier(recipe_template3.create_instance())]
 
 # Print the list of Bath objects
 for bath in baths:
@@ -172,3 +148,6 @@ for bath in baths:
 
 for manipulator in manipulators:
     print(manipulator)
+
+for carrier in work_order:
+    print(carrier)
