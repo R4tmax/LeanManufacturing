@@ -162,7 +162,9 @@ manipulators = [
 ]
 
 carrier_definition = [Carrier(recipe_template1.create_instance()),Carrier(recipe_template1.create_instance()),Carrier(recipe_template2.create_instance()),Carrier(recipe_template3.create_instance())]
+carriers_to_move = len(carrier_definition)
 work_order = deque(list(reversed(carrier_definition)))
+finished_carriers = deque()
 
 def print_collection(collection):
     for item in collection:
@@ -183,8 +185,18 @@ step_counter = 0 # one step is equal to one second
 baths[0].containedCarrier = work_order.pop()
 
 while not is_work_order_done:
-    print(baths[0])
-    step_counter+=1
-    print(step_counter, is_work_order_done)
-    if step_counter == 2:
+
+
+
+    if not baths[-1].containedCarrier is None:
+        finished_carriers.append(baths[-1].containedCarrier)
+
+    step_counter += 1
+    print(step_counter)
+
+    if len(finished_carriers) >= carriers_to_move:
+        is_work_order_done = True
+
+    #overflow control
+    if step_counter > 50000:
         is_work_order_done = True
