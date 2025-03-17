@@ -1,5 +1,6 @@
 from enum import Enum
 import time
+from collections import deque
 
 ### Object definition
 class Bath:
@@ -109,30 +110,30 @@ class Carrier:
 ### Data & condition definition
 
 bathData = [
-    ("Vstup do linky", 0), # index 0
-    ("Horký oplach - ponor", 2752),
-    ("Postřikové odmaštění", 6016),
-    ("Odmaštění – ponor I", 9626),
-    ("Odmaštění – ponor II", 12338),
-    ("Odmaštění – ponor III", 15069),
-    ("Oplach I- ponor", 17381),
-    ("Oplach II- ponor", 19706),
-    ("Oplach III- ponor", 22018),
-    ("Moření (kyselé čištění) – ponor", 24822),
-    ("Oplach IV po moření- ponor", 27241),
-    ("Oplach V po moření- ponor", 29550),
-    ("Aktivace - ponor", 31859),
-    ("Zn fosfátování - ponor", 34282),
-    ("Oplach IV demi - ponor", 36696),
-    ("Oplach V demi - ponor", 39006),
-    ("Pasivace - ponor", 41323),
-    ("Demi oplach - ponor", 43633),
-    ("Převážecí vozík předúprava", 45955),
-    ("KTL barva - ponor", 49805),
-    ("UF oplach 1 - ponor", 53073),
-    ("UF Oplach 2 - ponor", 55377),
-    ("Demi oplach 2 - ponor", 57687),
-    ("Výstup z linky", 60000) # index 23
+    ("Vstup do linky", 0, False), # index 0
+    ("Horký oplach - ponor", 2752, True),
+    ("Postřikové odmaštění", 6016, True),
+    ("Odmaštění – ponor I", 9626, True),
+    ("Odmaštění – ponor II", 12338, True),
+    ("Odmaštění – ponor III", 15069, True),
+    ("Oplach I- ponor", 17381,True),
+    ("Oplach II- ponor", 19706, True),
+    ("Oplach III- ponor", 22018,True),
+    ("Moření (kyselé čištění) – ponor", 24822,  True),
+    ("Oplach IV po moření- ponor", 27241, True),
+    ("Oplach V po moření- ponor", 29550, True),
+    ("Aktivace - ponor", 31859, True),
+    ("Zn fosfátování - ponor", 34282, True),
+    ("Oplach IV demi - ponor", 36696, True),
+    ("Oplach V demi - ponor", 39006, True),
+    ("Pasivace - ponor", 41323, True),
+    ("Demi oplach - ponor", 43633, True),
+    ("Převážecí vozík předúprava", 45955,True),
+    ("KTL barva - ponor", 49805, True),
+    ("UF oplach 1 - ponor", 53073, True),
+    ("UF Oplach 2 - ponor", 55377, True),
+    ("Demi oplach 2 - ponor", 57687, True),
+    ("Výstup z linky", 60000, False) # index 23
 ]
 
 manipData = [
@@ -150,28 +151,40 @@ recipe_template3 = RecipeTemplate("Test3", [(0, 0), (6, 400), (17, 300), (23, 0)
 
 ### Collection Instantiation & readback
 baths = [
-    Bath(name, distance / 1000)  # convert to m
-    for name, distance in bathData
+    Bath(name, distance / 1000, submergable=flag)  # convert to m
+    for name, distance, flag in bathData
 ]
 
-baths[0].isSubmergable = False
-baths[-1].isSubmergable = False
 
 manipulators = [
     Manipulator(reach,startingPosition)
     for reach, startingPosition in manipData
 ]
 
-work_order = [Carrier(recipe_template1.create_instance()),Carrier(recipe_template1.create_instance()),Carrier(recipe_template2.create_instance()),Carrier(recipe_template3.create_instance())]
+carrier_definition = [Carrier(recipe_template1.create_instance()),Carrier(recipe_template1.create_instance()),Carrier(recipe_template2.create_instance()),Carrier(recipe_template3.create_instance())]
+work_order = deque(list(reversed(carrier_definition)))
 
-# Print the list of Bath objects
-for bath in baths:
-    print(bath)
+def print_collection(collection):
+    for item in collection:
+        print(item)
 
-for manipulator in manipulators:
-    print(manipulator)
 
-for carrier in work_order:
-    print(carrier)
+def provide_states():
+    print_collection(baths)
+    print_collection(manipulators)
+    print_collection(carrier_definition)
+    print_collection(work_order)
+
+provide_states()
 
 ### Simulation
+is_work_order_done = False
+step_counter = 0 # one step is equal to one second
+baths[0].containedCarrier = work_order.pop()
+
+while not is_work_order_done:
+    print(baths[0])
+    step_counter+=1
+    print(step_counter, is_work_order_done)
+    if step_counter == 2:
+        is_work_order_done = True
