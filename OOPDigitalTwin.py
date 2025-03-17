@@ -23,7 +23,7 @@ class Manipulator:
     LIFT_TIME = 16  # Time for lift in seconds (constant)
     SPEED = 0.6  # Speed of the manipulator (constant, 0.6 m/s)
 
-    next_id = 0  # Class variable for auto-incrementing ID
+    next_id = 1  # Class variable for auto-incrementing ID
 
     def __init__(self, reach, starting_position):
         self.ManipUUID = Manipulator.next_id
@@ -69,7 +69,7 @@ class RecipeTemplate:
 
 
 class Recipe:
-    next_id = 0  # Class variable for auto-incrementing ID
+    next_id = 1  # Class variable for auto-incrementing ID
     def __init__(self, name, operations):
         self.recpUUID = Recipe.next_id  # Unique identifier for the recipe
         Recipe.next_id += 1
@@ -102,9 +102,8 @@ class Carrier:
 
     def get_current_step(self):
         """Returns the current recipe step."""
-        if self.currentStepIndex < len(self.requiredProcedure.executionList):
-            return self.requiredProcedure.executionList[self.currentStepIndex]
-        return None
+        return self.requiredProcedure.executionList[self.currentStepIndex]
+
 
 
 ### Data & condition definition
@@ -137,16 +136,16 @@ bathData = [
 ]
 
 manipData = [
-    ([0,1,2,3,4], 0 ),
-    ([4,5,6,7,8],  5 ),
-    ([8,9,10,11,12], 9 ),
-    ([13,14,15,16,17], 14 ),
+    ([0,1,2,3,5], 0 ),
+    ([4,5,6,7,8,9,10],  5 ),
+    ([8,9,10,11,12,13], 9 ),
+    ([12,13,14,15,16,17], 14 ),
     ([17,18,19,20,21,22,23], 18 )
 ]
 
-recipe_template1 = RecipeTemplate("Test1", [(0, 0), (5, 120), (10, 30), (23, 0)])
-recipe_template2 = RecipeTemplate("Test2", [(0, 0), (5, 400), (10, 300), (23, 0)])
-recipe_template3 = RecipeTemplate("Test3", [(0, 0), (6, 400), (17, 300), (23, 0)])
+recipe_template1 = RecipeTemplate("Test1", [(0, 0), (5, 120), (10, 30),  (12,50), (17,300), (23, 0)])
+recipe_template2 = RecipeTemplate("Test2", [(0, 0), (5, 400), (10, 300), (12,50), (17,300), (23, 0)])
+recipe_template3 = RecipeTemplate("Test3", [(0, 0), (5, 400), (10,25), (12,50) ,(17, 300), (23, 0)])
 
 
 ### Collection Instantiation & readback
@@ -179,24 +178,79 @@ def provide_states():
 
 provide_states()
 
+### non object function definitions
+def move_carriers():
+    """Moves carriers using manipulators."""
+    for manipulator in manipulators:
+        # If the manipulator is holding a carrier, drop it at the next bath
+        if manipulator.heldCarrier:
+            carrier = manipulator.heldCarrier
+            current_step = carrier.get_current_step()
+            next_bath_id = current_step.bathID  # The next bath the carrier needs to go to
+
+            if next_bath_id in manipulator.operatingRange:  # Can the manipulator reach it?
+                print(f"Manipulator {manipulator.ManipUUID} moving Carrier {carrier.carUUID} to Bath {next_bath_id}")
+
+                # Drop carrier in the bath
+                if not baths[next_bath_id].containedCarrier is None:
+                    print("bath occupied, holding")
+                    continue
+
+                baths[next_bath_id].containedCarrier = carrier
+                manipulator.heldCarrier = None
+            else:
+                print(
+                    f"Manipulator {manipulator.ManipUUID} cannot move Carrier {carrier.carUUID} to Bath {next_bath_id}, out of range.")
+
+        # If the manipulator is not holding anything, check for a carrier to pick up
+        else:
+            for bath in baths:
+                if bath.bathUUID in manipulator.operatingRange and bath.containedCarrier:
+                    carrier = bath.containedCarrier
+                    carrier.currentStepIndex += 1
+                    bath.containedCarrier = None
+                    manipulator.heldCarrier = carrier
+                    # Move to the next step in the recipe
+                    print(
+                        f"Manipulator {manipulator.ManipUUID} picked up Carrier {carrier.carUUID} from Bath {bath.bathUUID}")
+                    break  # Only pick one carrier at a time
+
+
 ### Simulation
 is_work_order_done = False
+is_work_order_processed = False
 step_counter = 0 # one step is equal to one second
-baths[0].containedCarrier = work_order.pop()
 
 while not is_work_order_done:
 
-
+    if baths[0].containedCarrier is None and is_work_order_processed is False:
+        print("Loader ready")
+        carrier = work_order.pop()
+        print(f"Carrier: {carrier}, is now at line entry point")
+        baths[0].containedCarrier = carrier
+        if len(work_order) == 0:
+            is_work_order_processed = True
 
     if not baths[-1].containedCarrier is None:
         finished_carriers.append(baths[-1].containedCarrier)
+        baths[-1].containedCarrier = None
+
+    move_carriers()
+
+
 
     step_counter += 1
     print(step_counter)
 
     if len(finished_carriers) >= carriers_to_move:
         is_work_order_done = True
+        print("Workorder processed!")
 
     #overflow control
-    if step_counter > 50000:
+    if step_counter > 50:
         is_work_order_done = True
+        print("Simulation exceeds safe runtime, terminating")
+
+print(work_order)
+print(finished_carriers)
+provide_states()
