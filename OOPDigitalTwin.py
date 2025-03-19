@@ -17,6 +17,12 @@ class Bath:
     def __repr__(self):
         return f"Bath(ID={self.bathUUID}, Name={self.name}, Distance={self.distanceToStart} m, currently has {self.containedCarrier} submerged)"
 
+class ManipulatorState(Enum):
+    IDLE = "Idle"
+    MOVING = "Moving"
+    LIFTING = "Lifting"
+    SUBMERGING = "Submerging"
+    HOLDING = "Holding"
 
 class Manipulator:
     # Constants
@@ -33,9 +39,13 @@ class Manipulator:
         self.movementSpeed = Manipulator.SPEED
         self.position = starting_position
         self.heldCarrier = None
+        self.distance_rail = Manipulator.calculate_rail_meters(self)
+        self.state = ManipulatorState.IDLE
 
     def __repr__(self):
-        return f"Manipulator(ID={self.ManipUUID}, Located at position: {self.position}, services operations {self.operatingRange}, currently holds the {self.heldCarrier}"
+        return (f"Manipulator(ID={self.ManipUUID} is performing {self.state} at:"
+                f" position: {self.position} and meterwise position of {self.distance_rail}m,"
+                f" services operations {self.operatingRange}, currently holds the {self.heldCarrier}")
 
     def move_to(self, new_position):
         """Move manipulator to a new position."""
@@ -44,6 +54,9 @@ class Manipulator:
             self.position = new_position
         else:
             print(f"Manipulator {self.ManipUUID} cannot move to {new_position}, out of range.")
+
+    def calculate_rail_meters(self):
+        return baths[self.position].distanceToStart
 
 
 class RecipeStep:
@@ -79,12 +92,6 @@ class Recipe:
     def __repr__(self):
         return f"Recipe(ID={self.recpUUID}, Name={self.name}, Steps={len(self.executionList)})"
 
-
-class ManipulatorState(Enum):
-    IDLE = "Idle"
-    MOVING = "Moving"
-    LIFTING = "Lifting"
-    HOLDING = "Holding"
 
 
 class Carrier:
