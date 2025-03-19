@@ -18,16 +18,19 @@ class Bath:
         return f"Bath(ID={self.bathUUID}, Name={self.name}, Distance={self.distanceToStart} m, currently has {self.containedCarrier} submerged)"
 
 class ManipulatorState(Enum):
-    IDLE = "Idle"
-    MOVING = "Moving"
-    LIFTING = "Lifting"
-    SUBMERGING = "Submerging"
-    HOLDING = "Holding"
+    IDLE = "Idle" #Manipulator does not carry a carrier and has on tasking
+    MOVING = "Moving" #manipulator is changing positions
+    LIFTING = "Lifting" #manipulator is lifting a frame from a submerged position
+    DRIPPING = "Dripping" #manipulator has lifted a carrier and has to hold position until drip time is done
+    SUBMERGING = "Submerging" #manipulator is putting a frame into a bath
+    HOLDING = "Holding" #manipulator has a carrier, but possible target baths are occupied
+    LOADING = "Loading" #manipulator is in a process of picking up from position bath[0] or is letting go of a carrier at baths[-1]
 
 class Manipulator:
     # Constants
     LIFT_TIME = 16  # Time for lift in seconds (constant)
     SPEED = 0.6  # Speed of the manipulator (constant, 0.6 m/s)
+    QUEUE_TIME = 1 # Time it takes to pickup and position baths[0] and let go at baths[-1]
 
     next_id = 1  # Class variable for auto-incrementing ID
 
