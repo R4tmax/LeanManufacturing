@@ -44,6 +44,8 @@ class Manipulator:
         self.heldCarrier = None
         self.distance_rail = Manipulator.calculate_rail_meters(self)
         self.state = ManipulatorState.IDLE
+        self.target_position = None  # Track where the manipulator is moving
+        self.operation_timer = 0
 
     def __repr__(self):
         return (f"Manipulator(ID={self.ManipUUID} is performing {self.state} at:"
@@ -51,15 +53,32 @@ class Manipulator:
                 f" services operations {self.operatingRange}, currently holds the {self.heldCarrier}")
 
     def move_to(self, new_position):
-        """Move manipulator to a new position."""
         if new_position in self.operatingRange:
             print(f"Manipulator {self.ManipUUID} moving from {self.position} to {new_position}")
-            self.position = new_position
+            self.state = ManipulatorState.MOVING
+            self.target_position = new_position
+            self.update_movement()
         else:
             print(f"Manipulator {self.ManipUUID} cannot move to {new_position}, out of range.")
 
     def calculate_rail_meters(self):
         return baths[self.position].distanceToStart
+
+    def update_movement(self):
+        if self.state == ManipulatorState.MOVING:
+            target_distance = baths[self.target_position].distanceToStart
+            if target_distance > self.distance_rail:
+                self.distance_rail += self.SPEED
+                self.operation_timer += 1
+            else:
+                self.distance_rail -= self.SPEED
+                self.operation_timer += 1
+
+        if self.distance_rail >= baths[self.target_position].distanceToStart:
+            self.distance_rail = baths[self.target_position].distanceToStart
+            self.position = self.target_position
+            self.target_position = None
+            self.operation_timer = 0
 
 
 class RecipeStep:
@@ -203,19 +222,22 @@ def move_carriers():
 
                 # Drop carrier in the bath
                 if not baths[next_bath_id].containedCarrier is None:
-                    print("bath occupied, holding")
+                    print(f"bath occupied{baths[next_bath_id]}, holding")
                     continue
 
                 baths[next_bath_id].containedCarrier = carrier
                 manipulator.heldCarrier = None
+                manipulator.state = ManipulatorState.IDLE
             else:
                 print(
-                    f"Manipulator {manipulator.ManipUUID} cannot move Carrier {carrier.carUUID} to Bath {next_bath_id}, out of range.")
+                    f"Manipulator {manipulator.ManipUUID} cannot move Carrier {carrier.carUUID} to Bath {next_bath_id}, out of range."
+                    f"This is an error in bath/procedure definition as the line is unable to finish the workload, terminating")
+                break
 
         # If the manipulator is not holding anything, check for a carrier to pick up
         else:
             for bath in baths:
-                if bath.bathUUID in manipulator.operatingRange and bath.containedCarrier:
+                if bath.bathUUID in manipulator.operatingRange and bath.containedCarrier and manipulator.state == ManipulatorState.IDLE:
                     carrier = bath.containedCarrier
                     carrier.currentStepIndex += 1
                     bath.containedCarrier = None
@@ -252,13 +274,14 @@ while not is_work_order_done:
 
     if len(finished_carriers) >= carriers_to_move:
         is_work_order_done = True
+        provide_states()
         print("Workorder processed successfully!")
 
     #overflow control
     if step_counter > 2000:
         is_work_order_done = True
+        provide_states()
         print("Simulation exceeds safe runtime, terminating")
 
 print("Loader state: " + str(work_order))
 print("Off loader state: " + str(finished_carriers))
-#provide_states()
