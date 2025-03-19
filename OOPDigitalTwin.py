@@ -77,8 +77,17 @@ class Manipulator:
         if self.distance_rail >= baths[self.target_position].distanceToStart:
             self.distance_rail = baths[self.target_position].distanceToStart
             self.position = self.target_position
-            self.target_position = None
+            self.state = ManipulatorState.SUBMERGING
             self.operation_timer = 0
+
+    def load_into_line(self):
+        carrier = baths[self.position].containedCarrier
+        carrier.get_current_step().completed = True
+        carrier.currentStepIndex += 1
+        self.heldCarrier = carrier
+        baths[self.position].containedCarrier = None
+        carrier.state = CarrierState.SERVICED
+        self.move_to(carrier.get_current_step().bathID)
 
 
 class RecipeStep:
@@ -115,6 +124,12 @@ class Recipe:
         return f"Recipe(ID={self.recpUUID}, Name={self.name}, Steps={len(self.executionList)})"
 
 
+class CarrierState(Enum):
+    UNSERVICED = "Unserviced"
+    TO_BE_LOADED = "Loading needed"
+    BATHING = "Bathing"
+    SERVICED = "In transit"
+    DRIPPING = "Dripping progress"
 
 class Carrier:
     next_id = 1
@@ -123,7 +138,7 @@ class Carrier:
         Carrier.next_id += 1   # Unique identifier for the carrier
         self.requiredProcedure = procedure  # The Recipe the carrier follows
         self.currentStepIndex = 0  # Keeps track of the current step in the recipe
-        self.state = ManipulatorState.IDLE  # Default state
+        self.state = CarrierState.UNSERVICED  # Default state
 
     def __repr__(self):
         return f"Carrier(ID={self.carUUID}, Current Step: {self.currentStepIndex}, Recipe: {self.requiredProcedure.name})"
@@ -165,7 +180,7 @@ bathData = [
 ]
 
 manipData = [
-    ([0,1,2,3,5], 0 ),
+    ([0,1,2,3,4,5], 0 ),
     ([4,5,6,7,8,9,10],  5 ),
     ([8,9,10,11,12,13], 9 ),
     ([12,13,14,15,16,17], 14 ),
@@ -247,6 +262,22 @@ def move_carriers():
                         f"Manipulator {manipulator.ManipUUID} picked up Carrier {carrier.carUUID} from Bath {bath.bathUUID}")
                     break  # Only pick one carrier at a time
 
+def update_simulation():
+    for manipulator in manipulators:
+        if manipulator.state == ManipulatorState.MOVING:
+            manipulator.update_movement()
+            print("hello")
+        elif manipulator.position == 0 and baths[0].containedCarrier.state.TO_BE_LOADED:
+            manipulator.load_into_line()
+        else:
+            for bath in baths:
+                if bath.bathUUID in manipulator.operatingRange and bath.containedCarrier and bath.containedCarrier.state == CarrierState.UNSERVICED and manipulator.state == ManipulatorState.IDLE:
+                    print(f"Tasking manip {manipulator.ManipUUID} with servicing {bath.containedCarrier} at bath{bath}")
+                    bath.containedCarrier.state = CarrierState.TO_BE_LOADED
+                    manipulator.move_to(bath.bathUUID)
+
+
+
 
 ### Simulation
 is_work_order_done = False
@@ -267,7 +298,8 @@ while not is_work_order_done:
         finished_carriers.append(baths[-1].containedCarrier)
         baths[-1].containedCarrier = None
 
-    move_carriers()
+    #move_carriers()
+    update_simulation()
 
     step_counter += 1
     print(step_counter)
@@ -278,7 +310,7 @@ while not is_work_order_done:
         print("Workorder processed successfully!")
 
     #overflow control
-    if step_counter > 2000:
+    if step_counter > 30:
         is_work_order_done = True
         provide_states()
         print("Simulation exceeds safe runtime, terminating")
