@@ -244,20 +244,18 @@ while not is_work_order_done:
 
     move_carriers()
 
-
-
     step_counter += 1
     print(step_counter)
 
     if len(finished_carriers) >= carriers_to_move:
         is_work_order_done = True
-        print("Workorder processed!")
+        print("Workorder processed successfully!")
 
     #overflow control
-    if step_counter > 50:
+    if step_counter > 2000:
         is_work_order_done = True
         print("Simulation exceeds safe runtime, terminating")
 
-print(work_order)
-print(finished_carriers)
-provide_states()
+print("Loader state: " + str(work_order))
+print("Off loader state: " + str(finished_carriers))
+#provide_states()
