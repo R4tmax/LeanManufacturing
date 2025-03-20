@@ -65,20 +65,21 @@ class Manipulator:
         return baths[self.position].distanceToStart
 
     def update_movement(self):
-        if self.state == ManipulatorState.MOVING:
+        if self.state == ManipulatorState.MOVING and self.target_position is not None:
             target_distance = baths[self.target_position].distanceToStart
-            if target_distance > self.distance_rail:
-                self.distance_rail += self.SPEED
+
+            if self.distance_rail < target_distance:  # Moving RIGHT
+                self.distance_rail = min(self.distance_rail + self.SPEED, target_distance)
                 self.operation_timer += 1
-            else:
-                self.distance_rail -= self.SPEED
+            elif self.distance_rail > target_distance:  # Moving LEFT
+                self.distance_rail = max(self.distance_rail - self.SPEED, target_distance)
                 self.operation_timer += 1
 
-        if self.distance_rail >= baths[self.target_position].distanceToStart:
-            self.distance_rail = baths[self.target_position].distanceToStart
-            self.position = self.target_position
-            self.state = ManipulatorState.SUBMERGING
-            self.operation_timer = 0
+            # Check if we reached the destination
+            if self.distance_rail == target_distance:
+                self.position = self.target_position
+                self.operation_timer = 0
+                self.state = ManipulatorState.IDLE
 
     def load_into_line(self):
         carrier = baths[self.position].containedCarrier
@@ -88,6 +89,37 @@ class Manipulator:
         baths[self.position].containedCarrier = None
         carrier.state = CarrierState.SERVICED
         self.move_to(carrier.get_current_step().bathID)
+
+    def dismount_carrier(self):
+        print(f"Manip {self.ManipUUID} offloading payload into {baths[self.target_position]}")
+        self.state = ManipulatorState.SUBMERGING
+        self.operation_timer = 0
+
+    def lower_carrier(self):
+        self.operation_timer += 1
+
+        if self.operation_timer >= self.LIFT_TIME:
+            bath = baths[self.target_position]
+            bath.containedCarrier = self.heldCarrier
+            bath.containedCarrier.state = CarrierState.BATHING
+            print(f"Manip {self.ManipUUID} offloaded payload into {baths[self.target_position]}")
+            self.heldCarrier = None
+            self.target_position = None
+            self.state = ManipulatorState.IDLE
+
+    def lift_carrier(self):
+        print(f"Manip {self.ManipUUID} loading payload from {baths[self.target_position]}")
+        bath = baths[self.target_position]
+        carrier = bath.containedCarrier
+        carrier.currentStepIndex += 1
+        self.heldCarrier = carrier
+        bath.containedCarrier = None
+        carrier.state = CarrierState.SERVICED
+        self.state = ManipulatorState.LIFTING
+        self.operation_timer = 0
+
+
+
 
 
 class RecipeStep:
@@ -141,7 +173,7 @@ class Carrier:
         self.state = CarrierState.UNSERVICED  # Default state
 
     def __repr__(self):
-        return f"Carrier(ID={self.carUUID}, Current Step: {self.currentStepIndex}, Recipe: {self.requiredProcedure.name})"
+        return f"Carrier(ID={self.carUUID}, Current Step: {self.currentStepIndex},state {self.state} ,Recipe: {self.requiredProcedure.name})"
 
 
     def get_current_step(self):
@@ -187,9 +219,9 @@ manipData = [
     ([17,18,19,20,21,22,23], 18 )
 ]
 
-recipe_template1 = RecipeTemplate("Test1", [(0, 0), (5, 120), (10, 30),  (12,50), (17,300), (23, 0)])
-recipe_template2 = RecipeTemplate("Test2", [(0, 0), (5, 400), (10, 300), (12,50), (17,300), (23, 0)])
-recipe_template3 = RecipeTemplate("Test3", [(0, 0), (5, 400), (10,25), (12,50) ,(17, 300), (23, 0)])
+recipe_template1 = RecipeTemplate("Test1", [(0, 0), (5, 1), (10, 3),  (12,5), (17,3), (23, 0)])
+recipe_template2 = RecipeTemplate("Test2", [(0, 0), (5, 4), (10, 3), (12,5), (17,3), (23, 0)])
+recipe_template3 = RecipeTemplate("Test3", [(0, 0), (5, 4), (10,2), (12,5) ,(17, 3), (23, 0)])
 
 
 ### Collection Instantiation & readback
@@ -223,61 +255,37 @@ def provide_states():
 provide_states()
 
 ### non object function definitions
-def move_carriers():
-    """Moves carriers using manipulators."""
-    for manipulator in manipulators:
-        # If the manipulator is holding a carrier, drop it at the next bath
-        if manipulator.heldCarrier:
-            carrier = manipulator.heldCarrier
-            current_step = carrier.get_current_step()
-            next_bath_id = current_step.bathID  # The next bath the carrier needs to go to
-
-            if next_bath_id in manipulator.operatingRange:  # Can the manipulator reach it?
-                print(f"Manipulator {manipulator.ManipUUID} moving Carrier {carrier.carUUID} to Bath {next_bath_id}")
-
-                # Drop carrier in the bath
-                if not baths[next_bath_id].containedCarrier is None:
-                    print(f"bath occupied{baths[next_bath_id]}, holding")
-                    continue
-
-                baths[next_bath_id].containedCarrier = carrier
-                manipulator.heldCarrier = None
-                manipulator.state = ManipulatorState.IDLE
-            else:
-                print(
-                    f"Manipulator {manipulator.ManipUUID} cannot move Carrier {carrier.carUUID} to Bath {next_bath_id}, out of range."
-                    f"This is an error in bath/procedure definition as the line is unable to finish the workload, terminating")
-                break
-
-        # If the manipulator is not holding anything, check for a carrier to pick up
-        else:
-            for bath in baths:
-                if bath.bathUUID in manipulator.operatingRange and bath.containedCarrier and manipulator.state == ManipulatorState.IDLE:
-                    carrier = bath.containedCarrier
-                    carrier.currentStepIndex += 1
-                    bath.containedCarrier = None
-                    manipulator.heldCarrier = carrier
-                    # Move to the next step in the recipe
-                    print(
-                        f"Manipulator {manipulator.ManipUUID} picked up Carrier {carrier.carUUID} from Bath {bath.bathUUID}")
-                    break  # Only pick one carrier at a time
-
-def update_simulation():
+def move_manipulators():
     for manipulator in manipulators:
         if manipulator.state == ManipulatorState.MOVING:
             manipulator.update_movement()
-            print("hello")
-        elif manipulator.position == 0 and baths[0].containedCarrier.state.TO_BE_LOADED:
+
+        if manipulator.state == ManipulatorState.SUBMERGING:
+            manipulator.lower_carrier()
+            continue
+
+
+        if manipulator.position == 0 and baths[0].containedCarrier.state.TO_BE_LOADED and manipulator.heldCarrier is None:
             manipulator.load_into_line()
-        else:
-            for bath in baths:
-                if bath.bathUUID in manipulator.operatingRange and bath.containedCarrier and bath.containedCarrier.state == CarrierState.UNSERVICED and manipulator.state == ManipulatorState.IDLE:
-                    print(f"Tasking manip {manipulator.ManipUUID} with servicing {bath.containedCarrier} at bath{bath}")
-                    bath.containedCarrier.state = CarrierState.TO_BE_LOADED
-                    manipulator.move_to(bath.bathUUID)
+
+        elif manipulator.position == manipulator.target_position and baths[manipulator.position].containedCarrier is None:
+            manipulator.dismount_carrier()
+
+        elif manipulator.position == manipulator.target_position and manipulator.heldCarrier is None and baths[manipulator.position].containedCarrier.state == CarrierState.BATHING:
+            manipulator.lift_carrier()
 
 
+def check_baths():
+    for manipulator in manipulators:
+        for bath in baths:
+            if bath.bathUUID in manipulator.operatingRange and bath.containedCarrier and bath.containedCarrier.state == CarrierState.UNSERVICED and manipulator.state == ManipulatorState.IDLE:
+                print(f"Tasking manip {manipulator.ManipUUID} with servicing {bath.containedCarrier} at bath{bath}")
+                bath.containedCarrier.state = CarrierState.TO_BE_LOADED
+                manipulator.move_to(bath.bathUUID)
 
+def update_simulation():
+    move_manipulators()
+    check_baths()
 
 ### Simulation
 is_work_order_done = False
@@ -289,6 +297,7 @@ while not is_work_order_done:
     if baths[0].containedCarrier is None and is_work_order_processed is False:
         print("Loader ready")
         carrier = work_order.pop()
+        #carrier.state = CarrierState.
         print(f"Carrier: {carrier}, is now at line entry point")
         baths[0].containedCarrier = carrier
         if len(work_order) == 0:
@@ -310,7 +319,7 @@ while not is_work_order_done:
         print("Workorder processed successfully!")
 
     #overflow control
-    if step_counter > 30:
+    if step_counter > 50:
         is_work_order_done = True
         provide_states()
         print("Simulation exceeds safe runtime, terminating")
