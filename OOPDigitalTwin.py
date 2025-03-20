@@ -1,3 +1,4 @@
+import sys
 from enum import Enum
 import time
 from collections import deque
@@ -160,6 +161,7 @@ class CarrierState(Enum):
     UNSERVICED = "Unserviced"
     TO_BE_LOADED = "Loading needed"
     BATHING = "Bathing"
+    BATH_COMPLETED = "Completed bath, dripping required"
     SERVICED = "In transit"
     DRIPPING = "Dripping progress"
 
@@ -171,14 +173,24 @@ class Carrier:
         self.requiredProcedure = procedure  # The Recipe the carrier follows
         self.currentStepIndex = 0  # Keeps track of the current step in the recipe
         self.state = CarrierState.UNSERVICED  # Default state
+        self.operation_timer = 0 # keeps track of bathing time before switching states
 
     def __repr__(self):
         return f"Carrier(ID={self.carUUID}, Current Step: {self.currentStepIndex},state {self.state} ,Recipe: {self.requiredProcedure.name})"
 
-
     def get_current_step(self):
         """Returns the current recipe step."""
         return self.requiredProcedure.executionList[self.currentStepIndex]
+
+    def update_bathe_timer(self):
+        if self.state == CarrierState.BATHING:
+            self.operation_timer += 1
+
+            if self.operation_timer >= self.get_current_step().submersionTime:
+                self.state = CarrierState.BATH_COMPLETED
+                self.operation_timer = 0
+        else:
+            raise RuntimeError("ERROR: UNEXPECTED STATE")
 
 
 
@@ -282,6 +294,10 @@ def check_baths():
                 print(f"Tasking manip {manipulator.ManipUUID} with servicing {bath.containedCarrier} at bath{bath}")
                 bath.containedCarrier.state = CarrierState.TO_BE_LOADED
                 manipulator.move_to(bath.bathUUID)
+
+    for bath in baths:
+        if bath.containedCarrier is not None and bath.containedCarrier.state == CarrierState.BATHING:
+            bath.containedCarrier.update_bathe_timer()
 
 def update_simulation():
     move_manipulators()
