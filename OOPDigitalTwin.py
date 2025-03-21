@@ -108,17 +108,35 @@ class Manipulator:
             self.target_position = None
             self.state = ManipulatorState.IDLE
 
-    def lift_carrier(self):
-        print(f"Manip {self.ManipUUID} loading payload from {baths[self.target_position]}")
+    def mount_carrier(self):
+        print(f"Manip {self.ManipUUID} loading payload from {baths[self.target_position]}, dripping expected")
+        self.operation_timer = 0
         bath = baths[self.target_position]
         carrier = bath.containedCarrier
-        carrier.currentStepIndex += 1
-        self.heldCarrier = carrier
-        bath.containedCarrier = None
-        carrier.state = CarrierState.SERVICED
+        carrier.state = CarrierState.DRIPPING
         self.state = ManipulatorState.LIFTING
-        self.operation_timer = 0
 
+
+    def lift_carrier(self):
+        self.operation_timer += 1
+
+        if self.operation_timer >= self.LIFT_TIME:
+            bath = baths[self.target_position]
+            carrier = bath.containedCarrier
+            carrier.currentStepIndex += 1
+            self.state = ManipulatorState.DRIPPING
+            self.heldCarrier = carrier
+            bath.containedCarrier = None
+            self.operation_timer = 0
+            print(f"Manip {self.ManipUUID} loaded payload from {baths[self.target_position]}, dripping to commence")
+
+    def drip_carrier(self):
+        self.operation_timer += 1
+
+        if self.operation_timer >= self.heldCarrier.get_current_step().dripTime:
+            self.operation_timer = 0
+            self.heldCarrier.state = CarrierState.SERVICED
+            self.move_to(self.heldCarrier.get_current_step().bathID)
 
 
 
@@ -276,15 +294,22 @@ def move_manipulators():
             manipulator.lower_carrier()
             continue
 
+        if manipulator.state == ManipulatorState.LIFTING:
+            manipulator.lift_carrier()
+            continue
 
-        if manipulator.position == 0 and baths[0].containedCarrier.state.TO_BE_LOADED and manipulator.heldCarrier is None:
+        if manipulator.state == ManipulatorState.DRIPPING:
+            manipulator.drip_carrier()
+            continue
+
+        if manipulator.position == 0 and baths[0].containedCarrier is not None and baths[0].containedCarrier.state.TO_BE_LOADED and manipulator.heldCarrier is None:
             manipulator.load_into_line()
 
         elif manipulator.position == manipulator.target_position and baths[manipulator.position].containedCarrier is None:
             manipulator.dismount_carrier()
 
-        elif manipulator.position == manipulator.target_position and manipulator.heldCarrier is None and baths[manipulator.position].containedCarrier.state == CarrierState.BATHING:
-            manipulator.lift_carrier()
+        elif manipulator.position == manipulator.target_position and manipulator.heldCarrier is None and baths[manipulator.position].containedCarrier.state == CarrierState.BATH_COMPLETED:
+            manipulator.mount_carrier()
 
 
 def check_baths():
@@ -298,6 +323,12 @@ def check_baths():
     for bath in baths:
         if bath.containedCarrier is not None and bath.containedCarrier.state == CarrierState.BATHING:
             bath.containedCarrier.update_bathe_timer()
+
+    for manipulator in manipulators:
+        for bath in baths:
+            if bath.bathUUID in manipulator.operatingRange and bath.containedCarrier and bath.containedCarrier.state == CarrierState.BATH_COMPLETED and manipulator.state == ManipulatorState.IDLE:
+                print(f"Tasking manip {manipulator.ManipUUID} with servicing {bath.containedCarrier} at bath{bath}")
+                manipulator.move_to(bath.bathUUID)
 
 def update_simulation():
     move_manipulators()
@@ -335,7 +366,7 @@ while not is_work_order_done:
         print("Workorder processed successfully!")
 
     #overflow control
-    if step_counter > 50:
+    if step_counter > 1000:
         is_work_order_done = True
         provide_states()
         print("Simulation exceeds safe runtime, terminating")
