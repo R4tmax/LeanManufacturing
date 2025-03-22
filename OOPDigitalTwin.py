@@ -125,6 +125,7 @@ class Manipulator:
             carrier = bath.containedCarrier
             carrier.currentStepIndex += 1
             self.state = ManipulatorState.DRIPPING
+            carrier.state = CarrierState.DRIPPING
             self.heldCarrier = carrier
             bath.containedCarrier = None
             self.operation_timer = 0
@@ -143,7 +144,10 @@ class Manipulator:
 
 class RecipeStep:
     DRIP_TIME = 20 # set to constant for now
+    next_id = 0
     def __init__(self, bid, submersion_time):
+        self.step_identifier = self.next_id
+        RecipeStep.next_id += 1
         self.bathID = bid  # The bath to use in this step
         self.submersionTime = submersion_time  # Time to submerge the product
         self.dripTime = RecipeStep.DRIP_TIME  # Time to drip before moving on
@@ -180,6 +184,7 @@ class CarrierState(Enum):
     TO_BE_LOADED = "Loading needed"
     BATHING = "Bathing"
     BATH_COMPLETED = "Completed bath, dripping required"
+    BATH_SERVICED = "Manipulator tasked for dripping"
     SERVICED = "In transit"
     DRIPPING = "Dripping progress"
 
@@ -308,7 +313,7 @@ def move_manipulators():
         elif manipulator.position == manipulator.target_position and baths[manipulator.position].containedCarrier is None:
             manipulator.dismount_carrier()
 
-        elif manipulator.position == manipulator.target_position and manipulator.heldCarrier is None and baths[manipulator.position].containedCarrier.state == CarrierState.BATH_COMPLETED:
+        elif manipulator.position == manipulator.target_position and manipulator.heldCarrier is None and baths[manipulator.position].containedCarrier.state == CarrierState.BATH_SERVICED:
             manipulator.mount_carrier()
 
 
@@ -319,6 +324,7 @@ def check_baths():
                 print(f"Tasking manip {manipulator.ManipUUID} with servicing {bath.containedCarrier} at bath{bath}")
                 bath.containedCarrier.state = CarrierState.TO_BE_LOADED
                 manipulator.move_to(bath.bathUUID)
+                continue
 
     for bath in baths:
         if bath.containedCarrier is not None and bath.containedCarrier.state == CarrierState.BATHING:
@@ -327,8 +333,22 @@ def check_baths():
     for manipulator in manipulators:
         for bath in baths:
             if bath.bathUUID in manipulator.operatingRange and bath.containedCarrier and bath.containedCarrier.state == CarrierState.BATH_COMPLETED and manipulator.state == ManipulatorState.IDLE:
-                print(f"Tasking manip {manipulator.ManipUUID} with servicing {bath.containedCarrier} at bath{bath}")
-                manipulator.move_to(bath.bathUUID)
+                carrier = bath.containedCarrier  # Fetch the carrier inside the bath
+                next_step_index = carrier.currentStepIndex + 1  # Predict next step index
+
+                # Ensure next_step_index is within range
+                if next_step_index < len(carrier.requiredProcedure.executionList):
+                    next_bath_step = carrier.requiredProcedure.executionList[next_step_index].bathID
+                    if next_bath_step in manipulator.operatingRange:
+                        print(f"Tasking manip {manipulator.ManipUUID} with servicing {carrier} at bath {bath}")
+                        carrier.state = CarrierState.BATH_SERVICED
+                        manipulator.move_to(bath.bathUUID)
+                    else:
+                        print(
+                            f"Manipulator {manipulator.ManipUUID} cannot service next target {next_bath_step} for {carrier}")
+                else:
+                    print(f"Carrier {carrier} has no further steps in its process.")
+
 
 def update_simulation():
     move_manipulators()
