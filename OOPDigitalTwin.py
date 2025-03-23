@@ -79,6 +79,9 @@ class Manipulator:
                 if manipulators[next_manip_index].state not in (ManipulatorState.LIFTING,ManipulatorState.SUBMERGING,ManipulatorState.DRIPPING) and self.distance_rail >= manipulators[next_manip_index].distance_rail:
                     print(f"{self} is on collision course with {manipulators[next_manip_index]}, evasive action taken")
                     manipulators[next_manip_index].distance_rail += manipulators[next_manip_index].SPEED
+                elif manipulators[next_manip_index].state in (ManipulatorState.LIFTING,ManipulatorState.SUBMERGING,ManipulatorState.DRIPPING) and self.distance_rail >= manipulators[next_manip_index].distance_rail:
+                    print(f"unable to perform evasion{self} holding position")
+                    self.distance_rail -= self.SPEED
 
             elif self.distance_rail > target_distance:  # Moving LEFT
                 self.distance_rail = max(self.distance_rail - self.SPEED, target_distance)
