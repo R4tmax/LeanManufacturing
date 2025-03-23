@@ -72,10 +72,11 @@ class Manipulator:
             if self.distance_rail < target_distance:  # Moving RIGHT
                 self.distance_rail = min(self.distance_rail + self.SPEED, target_distance)
                 self.operation_timer += 1
-                next_manip_index = self.ManipUUID+1
-                if next_manip_index >= len(manipulators)-1:
+                next_manip_index = self.ManipUUID
+                if next_manip_index >= len(manipulators):
                     return
-                if manipulators[next_manip_index].state not in (ManipulatorState.LIFTING,ManipulatorState.SUBMERGING,ManipulatorState.DRIPPING) and manipulators[next_manip_index].distance_rail <= self.distance_rail:
+                #print(f"Running collision analysis for {self} and {manipulators[next_manip_index]}")
+                if manipulators[next_manip_index].state not in (ManipulatorState.LIFTING,ManipulatorState.SUBMERGING,ManipulatorState.DRIPPING) and self.distance_rail >= manipulators[next_manip_index].distance_rail:
                     print(f"{self} is on collision course with {manipulators[next_manip_index]}, evasive action taken")
                     manipulators[next_manip_index].distance_rail += manipulators[next_manip_index].SPEED
 
