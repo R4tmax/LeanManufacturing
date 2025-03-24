@@ -1,5 +1,6 @@
 from enum import Enum
 from collections import deque, defaultdict
+import math
 
 
 ### Object definition
@@ -76,10 +77,10 @@ class Manipulator:
                     return
                 #print(f"Running collision analysis for {self} and {manipulators[next_manip_index]}")
                 if manipulators[next_manip_index].state not in (ManipulatorState.LIFTING,ManipulatorState.SUBMERGING,ManipulatorState.DRIPPING) and self.distance_rail >= manipulators[next_manip_index].distance_rail:
-                    print(f"{self} is on collision course with {manipulators[next_manip_index]}, evasive action taken")
+                    print(f"{self.ManipUUID} is on collision rightwise course with {manipulators[next_manip_index].ManipUUID}, evasive action taken")
                     manipulators[next_manip_index].distance_rail += manipulators[next_manip_index].SPEED
                 elif manipulators[next_manip_index].state in (ManipulatorState.LIFTING,ManipulatorState.SUBMERGING,ManipulatorState.DRIPPING) and self.distance_rail >= manipulators[next_manip_index].distance_rail:
-                    print(f"unable to perform evasion {self} holding position")
+                    print(f"unable to perform rightwise evasion {self.ManipUUID} holding position")
                     self.distance_rail -= self.SPEED
 
             elif self.distance_rail > target_distance:  # Moving LEFT
@@ -89,14 +90,14 @@ class Manipulator:
                 if prev_manip_index >= 0:
                     if manipulators[prev_manip_index].state not in (
                     ManipulatorState.LIFTING, ManipulatorState.SUBMERGING,
-                    ManipulatorState.DRIPPING) and self.distance_rail <= manipulators[prev_manip_index].distance_rail:
+                    ManipulatorState.DRIPPING) and self.distance_rail <= manipulators[prev_manip_index].distance_rail and prev_manip_index != self.ManipUUID:
                         print(
-                            f"{self} is on collision course with {manipulators[prev_manip_index]}, evasive action taken")
+                            f"{self.ManipUUID} is on collision leftwise course with {manipulators[prev_manip_index].ManipUUID}, evasive action taken")
                         manipulators[prev_manip_index].distance_rail -= manipulators[prev_manip_index].SPEED
                     elif manipulators[prev_manip_index].state in (ManipulatorState.LIFTING, ManipulatorState.SUBMERGING,
                                                                   ManipulatorState.DRIPPING) and self.distance_rail <= \
                             manipulators[prev_manip_index].distance_rail:
-                        print(f"Unable to perform evasion, {self} holding position")
+                        print(f"Unable to perform leftwise evasion, {self.ManipUUID} holding position")
                         self.distance_rail += self.SPEED
 
             # Check if we reached the destination
@@ -295,6 +296,7 @@ manipulators = [
     for reach, startingPosition in manipData
 ]
 
+#,Carrier(recipe_template1.create_instance())
 carrier_definition = [Carrier(recipe_template1.create_instance()),Carrier(recipe_template4.create_instance()),Carrier(recipe_template2.create_instance()),Carrier(recipe_template3.create_instance())]
 carriers_to_move = len(carrier_definition)
 work_order = deque(list(reversed(carrier_definition)))
@@ -425,13 +427,13 @@ def update_simulation():
 is_work_order_done = False
 is_work_order_processed = False
 step_counter = 0 # one step is equal to one second
+deque_times = []
 
 while not is_work_order_done:
 
     if baths[0].containedCarrier is None and is_work_order_processed is False:
         print("Loader ready")
         carrier = work_order.pop()
-        #carrier.state = CarrierState.
         print(f"Carrier: {carrier}, is now at line entry point")
         baths[0].containedCarrier = carrier
         if len(work_order) == 0:
@@ -440,8 +442,8 @@ while not is_work_order_done:
     if not baths[-1].containedCarrier is None:
         finished_carriers.append(baths[-1].containedCarrier)
         baths[-1].containedCarrier = None
+        deque_times.append(step_counter)
 
-    #move_carriers()
     update_simulation()
 
     step_counter += 1
@@ -453,10 +455,19 @@ while not is_work_order_done:
         print("Workorder processed successfully!")
 
     #overflow control
-    if step_counter > 1000:
+    if step_counter > 10000:
         is_work_order_done = True
         provide_states()
+        print(carriers_to_move, len(finished_carriers))
         print("Simulation exceeds safe runtime, terminating")
 
+if len(deque_times) > 1:
+    time_diffs = [deque_times[i] - deque_times[i - 1] for i in range(1, len(deque_times))]
+    avg_time_between = sum(time_diffs) / len(time_diffs)
+else:
+    avg_time_between = 0  # Default to 0 if there aren't enough values
+
+print("Primary run completed")
+print(f"Whole cycle completed in {step_counter}s, average time between carrier dequeing is {avg_time_between:.2f}s")
 print("Loader state: " + str(work_order))
 print("Off loader state: " + str(finished_carriers))
