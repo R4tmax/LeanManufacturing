@@ -86,8 +86,8 @@ class Manipulator:
             elif self.distance_rail > target_distance:  # Moving LEFT
                 self.distance_rail = max(self.distance_rail - self.SPEED, target_distance)
                 self.operation_timer += 1
-                prev_manip_index = self.ManipUUID - 1
-                if prev_manip_index >= 0:
+                prev_manip_index = self.ManipUUID - 2
+                if prev_manip_index > 1:
                     if manipulators[prev_manip_index].state not in (
                     ManipulatorState.LIFTING, ManipulatorState.SUBMERGING,
                     ManipulatorState.DRIPPING) and self.distance_rail <= manipulators[prev_manip_index].distance_rail and prev_manip_index != self.ManipUUID:
@@ -104,7 +104,7 @@ class Manipulator:
             if self.distance_rail == target_distance:
                 self.position = self.target_position
                 self.operation_timer = 0
-                self.state = ManipulatorState.IDLE
+                #self.state = ManipulatorState.IDLE
 
     def load_into_line(self):
         carrier = baths[self.position].containedCarrier
@@ -296,8 +296,7 @@ manipulators = [
     for reach, startingPosition in manipData
 ]
 
-#,Carrier(recipe_template1.create_instance())
-carrier_definition = [Carrier(recipe_template1.create_instance()),Carrier(recipe_template4.create_instance()),Carrier(recipe_template2.create_instance()),Carrier(recipe_template3.create_instance())]
+carrier_definition = [Carrier(recipe_template1.create_instance()),Carrier(recipe_template4.create_instance()),Carrier(recipe_template2.create_instance()),Carrier(recipe_template3.create_instance()),Carrier(recipe_template1.create_instance())]
 carriers_to_move = len(carrier_definition)
 work_order = deque(list(reversed(carrier_definition)))
 finished_carriers = deque()
