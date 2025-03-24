@@ -2,6 +2,7 @@ import sys
 from enum import Enum
 import time
 from collections import deque
+#from collections import defaultdict
 
 ### Object definition
 class Bath:
@@ -281,6 +282,7 @@ manipData = [
 recipe_template1 = RecipeTemplate("Test1", [(0, 0), (5, 1), (10, 3),  (12,5), (17,3), (23, 0)])
 recipe_template2 = RecipeTemplate("Test2", [(0, 0), (5, 4), (10, 3), (12,5), (17,3), (23, 0)])
 recipe_template3 = RecipeTemplate("Test3", [(0, 0), (5, 4), (10,2), (12,5) ,(17, 3), (23, 0)])
+recipe_template4 = RecipeTemplate("Test4", [(17,10)])
 
 
 ### Collection Instantiation & readback
@@ -295,10 +297,26 @@ manipulators = [
     for reach, startingPosition in manipData
 ]
 
-carrier_definition = [Carrier(recipe_template1.create_instance()),Carrier(recipe_template1.create_instance()),Carrier(recipe_template2.create_instance()),Carrier(recipe_template3.create_instance())]
+carrier_definition = [Carrier(recipe_template1.create_instance()),Carrier(recipe_template4.create_instance()),Carrier(recipe_template2.create_instance()),Carrier(recipe_template3.create_instance())]
 carriers_to_move = len(carrier_definition)
 work_order = deque(list(reversed(carrier_definition)))
 finished_carriers = deque()
+
+def validate_work_order(manipulator_list, workorder_definition):
+    reachable_positions = {}
+    for manipulator in manipulator_list:
+        reachable_positions[manipulator.ManipUUID] = manipulator.operatingRange
+
+    required_positions = {}
+    for carrier in workorder_definition:
+        for step in carrier.requiredProcedure.executionList:
+            required_positions.setdefault(carrier.carUUID, []).append(step.bathID)
+
+    print(reachable_positions)
+    print(required_positions)
+    exit(1)
+
+validate_work_order(manipulators,carrier_definition)
 
 def print_collection(collection):
     for item in collection:
