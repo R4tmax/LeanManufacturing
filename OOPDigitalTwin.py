@@ -1,8 +1,6 @@
-import sys
 from enum import Enum
-import time
-from collections import deque
-#from collections import defaultdict
+from collections import deque, defaultdict
+
 
 ### Object definition
 class Bath:
@@ -282,7 +280,7 @@ manipData = [
 recipe_template1 = RecipeTemplate("Test1", [(0, 0), (5, 1), (10, 3),  (12,5), (17,3), (23, 0)])
 recipe_template2 = RecipeTemplate("Test2", [(0, 0), (5, 4), (10, 3), (12,5), (17,3), (23, 0)])
 recipe_template3 = RecipeTemplate("Test3", [(0, 0), (5, 4), (10,2), (12,5) ,(17, 3), (23, 0)])
-recipe_template4 = RecipeTemplate("Test4", [(17,10)])
+recipe_template4 = RecipeTemplate("Test4", [(0,0),(4,50),(8,60),(13,13),(17,10),(23,0)])
 
 
 ### Collection Instantiation & readback
@@ -302,19 +300,46 @@ carriers_to_move = len(carrier_definition)
 work_order = deque(list(reversed(carrier_definition)))
 finished_carriers = deque()
 
+
 def validate_work_order(manipulator_list, workorder_definition):
+    # Map of which manipulators can reach which baths
     reachable_positions = {}
     for manipulator in manipulator_list:
-        reachable_positions[manipulator.ManipUUID] = manipulator.operatingRange
+        reachable_positions[manipulator.ManipUUID] = set(manipulator.operatingRange)  # Store as a set for faster lookup
 
-    required_positions = {}
+    # Map of required bath positions for each carrier
+    required_positions = defaultdict(list)
     for carrier in workorder_definition:
         for step in carrier.requiredProcedure.executionList:
-            required_positions.setdefault(carrier.carUUID, []).append(step.bathID)
+            required_positions[carrier.carUUID].append(step.bathID)
 
-    print(reachable_positions)
-    print(required_positions)
-    exit(1)
+    print("Reachable Positions:", reachable_positions)
+    print("Required Positions:", required_positions)
+
+    # Validation logic
+    is_solvable = True
+    for carrier_id, bath_sequence in required_positions.items():
+        # Check start and end bath validity
+        if bath_sequence[0] != 0 or bath_sequence[-1] != 23:
+            print(f"Carrier {carrier_id} is invalid: does not start at bath[0] or end at bath[23]")
+            is_solvable = False
+            continue
+
+        # Check if there is a valid connection between baths
+        for i in range(len(bath_sequence) - 1):
+            bath_a = bath_sequence[i]
+            bath_b = bath_sequence[i + 1]
+            if not any(bath_a in manipulator and bath_b in manipulator for manipulator in reachable_positions.values()):
+                print(f"Carrier {carrier_id} is invalid: No manipulator can move from bath[{bath_a}] to bath[{bath_b}]")
+                is_solvable = False
+                break
+        else:
+            print(f"Carrier {carrier_id} is valid!")
+
+    if not is_solvable:
+        print("The initial bath and workorder definition is unsolvable, terminating")
+        exit(1)
+
 
 validate_work_order(manipulators,carrier_definition)
 
