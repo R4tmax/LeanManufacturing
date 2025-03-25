@@ -40,3 +40,43 @@ def initialize_baths():
         "Lázeň 20": {"used": True, "immersion_time": 90, "drain_time": 1, "distance": 1800},
         "Lázeň 21": {"used": True, "immersion_time": 90, "drain_time": 1, "distance": 1800},
     }
+
+def assign_baths_to_manipulators():
+    """
+    Assigns baths to manipulators dynamically. Each manipulator gets a portion of the available baths,
+    with some manipulators potentially getting an extra bath if there is a remainder.
+    The last bath from the previous manipulator is added as the first bath for the next manipulator.
+    """
+    baths = initialize_baths()  # Initialize bath parameters
+    manipulators = initialize_manipulators(9)  # Initialize manipulator parameters
+
+    # Get a list of all baths
+    all_baths = list(baths.keys())
+    num_baths = len(all_baths)  # Number of baths
+    num_manipulators = len(manipulators)  # Number of manipulators
+
+    # Dynamically distribute baths among manipulators
+    baths_per_manipulator = num_baths // num_manipulators  # How many baths each manipulator gets
+    remainder = num_baths % num_manipulators  # How many extra baths remain after division
+
+    start_index = 0
+    for i, manipulator in enumerate(manipulators.keys()):
+        # Calculate how many baths the current manipulator gets
+        if i < remainder:
+            # If there is a remainder, the first manipulators get one more bath
+            end_index = start_index + baths_per_manipulator + 1
+        else:
+            end_index = start_index + baths_per_manipulator
+
+        # Assign baths to the current manipulator
+        manipulators[manipulator]["baths"] = all_baths[start_index:end_index]
+
+        # For each manipulator except the first, add the last bath from the previous manipulator as the first bath
+        if i > 0:
+            manipulators[manipulator]["baths"] = [manipulators[list(manipulators.keys())[i - 1]]["baths"][-1]] + \
+                                                 manipulators[manipulator]["baths"]
+
+        # Set the index for the next manipulator
+        start_index = end_index
+
+    return manipulators, baths  # Return the updated manipulators and baths
