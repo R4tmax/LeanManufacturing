@@ -295,10 +295,18 @@ class Carrier:
         return f"Carrier(ID={self.carUUID}, Current Step: {self.currentStepIndex},state {self.state} ,Recipe: {self.requiredProcedure.name})"
 
     def get_current_step(self):
-        """Returns the current recipe step."""
+        """
+        Returns the current recipe step.
+        i.e. function facilitates retrieval of current RecipeStep based on the progression
+        of the manufacturing process
+        """
         return self.requiredProcedure.executionList[self.currentStepIndex]
 
     def update_bathe_timer(self):
+        """
+        Called by the simulation steps to update timers on submerged carriers, checking whether
+        the process is finished or not
+        """
         if self.state == CarrierState.BATHING:
             self.operation_timer += 1
 
@@ -309,9 +317,16 @@ class Carrier:
             raise RuntimeError("ERROR: UNEXPECTED STATE")
 
 
-
+"""
+In this section of the code, input parameters of the code are entered and 
+then processed by object constructors.
+"""
 ### Data & condition definition
 
+"""
+Specification of the line baths and distances.
+Indexes of baths are assigned automatically based on the input order.
+"""
 bathData = [
     ("Vstup do linky", 0, False), # index 0
     ("Horký oplach - ponor", 2752, True),
@@ -339,6 +354,9 @@ bathData = [
     ("Výstup z linky", 60000, False) # index 23
 ]
 
+"""
+Specifies desired manipulators, their assigned range, and starting position.
+"""
 manipData = [
     ([0,1,2,3,4,5], 0 ),
     ([4,5,6,7,8,9,10],  5 ),
@@ -347,6 +365,11 @@ manipData = [
     ([17,18,19,20,21,22,23], 18 )
 ]
 
+"""
+Defines individual recipes which need to be processed during the assembly line run. 
+Take note that the name definition is of no consequence and just helps to navigate the printed outputs. 
+The definitions of individual steps is a list of tuple pairs position(bathID) <-> submerge time.  
+"""
 recipe_template1 = RecipeTemplate("Test1", [(0, 0), (5, 1), (10, 3),  (12,5), (17,3), (23, 0)])
 recipe_template2 = RecipeTemplate("Test2", [(0, 0), (5, 4), (10, 3), (12,5), (17,3), (23, 0)])
 recipe_template3 = RecipeTemplate("Test3", [(0, 0), (5, 4), (10,2), (12,5) ,(17, 3), (23, 0)])
@@ -354,8 +377,11 @@ recipe_template4 = RecipeTemplate("Test4", [(0,0),(4,50),(8,60),(13,13),(17,10),
 
 
 ### Collection Instantiation & readback
+"""
+Object instantiation is handled in this block.
+"""
 baths = [
-    Bath(name, distance / 1000, submergable=flag)  # convert to m
+    Bath(name, distance / 1000, submergable=flag)  # converts to m from original measurement unit
     for name, distance, flag in bathData
 ]
 
@@ -365,12 +391,19 @@ manipulators = [
     for reach, startingPosition in manipData
 ]
 
+"""
+Carrier definition corresponds to the 'list' of carriers/products which need to be serviced (and their accompanying procedure).
+This is then converted to a stack data structure under the FIFO ruleset.
+"""
 carrier_definition = [Carrier(recipe_template1.create_instance()),Carrier(recipe_template4.create_instance()),Carrier(recipe_template2.create_instance()),Carrier(recipe_template3.create_instance()),Carrier(recipe_template1.create_instance())]
 carriers_to_move = len(carrier_definition)
 work_order = deque(list(reversed(carrier_definition)))
 finished_carriers = deque()
 
-
+"""
+Code runs this function before proceeding to the simulation step. 
+Terminates if the configuration is unsolvable.
+"""
 def validate_work_order(manipulator_list, workorder_definition):
     # Map of which manipulators can reach which baths
     reachable_positions = {}
@@ -413,6 +446,10 @@ def validate_work_order(manipulator_list, workorder_definition):
 
 validate_work_order(manipulators,carrier_definition)
 
+
+"""
+Auxiliary printing functions
+"""
 def print_collection(collection):
     for item in collection:
         print(item)
@@ -428,6 +465,10 @@ provide_states()
 
 ### non object function definitions
 def move_manipulators():
+    """
+    In this function, for each manipulator in a line, a state is checked
+    and a corresponding function is called to update and/or switch operations.
+    """
     for manipulator in manipulators:
         if manipulator.state == ManipulatorState.MOVING:
             manipulator.update_movement()
@@ -455,6 +496,11 @@ def move_manipulators():
 
 
 def check_baths():
+    """
+    In this function, each bath is checked against its respective manipulator operating range twice.
+    First, whether a loader has a new carrier available, secondly, whether carrier is ready to be lifted and proceed to a new step.
+    Furthermore,  bathing timers are updated from this function call.
+    """
     for manipulator in manipulators:
         for bath in baths:
             if bath.bathUUID in manipulator.operatingRange and bath.containedCarrier and bath.containedCarrier.state == CarrierState.UNSERVICED and manipulator.state == ManipulatorState.IDLE:
@@ -492,6 +538,20 @@ def update_simulation():
     check_baths()
 
 ### Simulation
+"""
+Simulation step of the program. 
+The primary simulation loop first handles initial and exit stack states,
+the loop is popping new carrier into a line every time the first slot of the line is available, until there are
+carriers to be processed.
+
+Finally the update_simulation function is called which by extension refers to check_baths and move_manipulators functions.
+As such, on every simulation loop iteration (which by design corresponds to one second) every manipulator and bath is checked for potential
+task allocations and status updates. 
+
+Choice of the time unit is mostly arbitrary, but changing it would require recalculating (or adding a dynamic mechanism for doing so) relevant datum parameters. 
+Since each validation is automatic, the overhead on manipulator assignments is very low. 
+It is up to debate, whether the approach isn't "too greedy" from the optimization perspective. 
+"""
 is_work_order_done = False
 is_work_order_processed = False
 step_counter = 0 # one step is equal to one second
