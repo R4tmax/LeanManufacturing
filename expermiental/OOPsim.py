@@ -173,3 +173,18 @@ def simulate_manipulators(manipulators, baths):
         time += travel_time(data["distance"])  # Add return travel time
         data["operations"][time] = "Completed"  # Log completion
         data["full_time"] = time  # Set full operation time
+
+# Synchronize operations to ensure all manipulators finish at the same time
+def synchronize_operations(manipulators):
+    """
+    Synchronizes the operations of all manipulators to ensure they finish at the same time.
+    """
+    max_full_time = max(data["full_time"] for data in manipulators.values())  # Find the maximum time
+    for manip, data in manipulators.items():
+        time_diff = max_full_time - data["full_time"]  # Calculate the time difference
+        if time_diff > 0:
+            # If there is a difference, adjust the times
+            data["operations"] = {t + time_diff: op for t, op in data["operations"].items()}
+            data["operations"][0] = f"Waiting until {max_full_time} s"  # Log the waiting period
+        data["full_time"] = max_full_time  # Update full time to match
+    return max_full_time, len(manipulators) * max_full_time
