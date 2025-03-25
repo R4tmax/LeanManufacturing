@@ -108,3 +108,18 @@ def travel_time(distance):
     # Total time is sum of all phases
     total_time = t_acc_time + t2 + t_dec_time
     return total_time
+
+# Simulate the movement of manipulators between baths
+def process_bath_entry(manip, i, bath, next_bath, data, baths, time, distance):
+    """
+    Handles the logic for entering a bath, calculating travel time, and updating operations.
+    """
+    data["operations"][time] = f"Arrival at {bath}"  # Log the arrival at the bath
+    if manip == "M1" or i > 0:
+        # If manipulator M1 or moving between multiple baths
+        time += travel_time(baths[bath]["distance"] + distance)  # Calculate and add travel time
+        data["distance"] += baths[bath]["distance"] + distance  # Add distance to the total
+    else:
+        # If it's the first bath for manipulator M1
+        time += travel_time(baths[next_bath]["distance"] + distance)  # Add travel time to the next bath
+    return time, 0  # Reset distance after arrival
