@@ -149,3 +149,27 @@ def process_removal(bath, data, time, is_last):
         data["operations"][time] = f"Removal from {bath}"
         time += 16  # Additional time for removal
     return time
+
+# Simulate the movement and operations of manipulators through the baths
+def simulate_manipulators(manipulators, baths):
+    """
+    Simulates the movement and operations of manipulators through the baths.
+    """
+    for manip, data in manipulators.items():
+        time = 0
+        distance = 0
+        for i, bath in enumerate(data["baths"]):
+            if baths[bath]["used"]:
+                # If bath is used, process the entry, immersion, and removal
+                next_bath = data["baths"][i + 1] if i + 1 < len(data["baths"]) else None
+                time, distance = process_bath_entry(manip, i, bath, next_bath, data, baths, time, distance)
+                time = process_immersion(bath, data, time)
+                time = process_removal(bath, data, time, is_last=(i == len(data["baths"]) - 1))
+            else:
+                # If bath is not used, just add distance
+                distance += baths[bath]["distance"]
+
+        data["operations"][time] = "Return trip"  # Log return trip
+        time += travel_time(data["distance"])  # Add return travel time
+        data["operations"][time] = "Completed"  # Log completion
+        data["full_time"] = time  # Set full operation time
