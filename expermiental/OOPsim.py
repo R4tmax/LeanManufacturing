@@ -123,3 +123,12 @@ def process_bath_entry(manip, i, bath, next_bath, data, baths, time, distance):
         # If it's the first bath for manipulator M1
         time += travel_time(baths[next_bath]["distance"] + distance)  # Add travel time to the next bath
     return time, 0  # Reset distance after arrival
+
+def process_immersion(bath, data, time):
+    """
+    Handles immersion into the bath, adding necessary time steps.
+    """
+    data["operations"][time] = f"Immersion in {bath}"  # Log immersion start
+    time += 16  # Additional time for immersion process
+    data["operations"][time] = f"Time in {bath}"  # Log the time spent in bath
+    return time
