@@ -1,24 +1,36 @@
 from enum import Enum
 from collections import deque, defaultdict
-import math
-
-
-### Object definition
+"""
+Code mimics the described assembly line problem and 
+attempts to solve the planning and optimization issue by 
+automatically solving for functional solutions of the work order,
+while tracking movements of manipulators.
+"""
+### Object definition block
 class Bath:
+    """
+    Definition of the bath object.
+    For the purposes of this code, very little distinction is made between
+    actual baths and 'special' positions within the assembly line.
+    """
     next_id = 0  # Class variable for auto-incrementing ID
 
     def __init__(self, name, distance, submergable=True):
         self.bathUUID = Bath.next_id  # Assign auto-incremented ID
         Bath.next_id += 1  # Increment for the next instance
-        self.name = name
+        self.name = name # plain text descriptor
         self.distanceToStart = distance  # Distance in m
-        self.containedCarrier = None
-        self.isSubmergable = submergable
+        self.containedCarrier = None # Object of carrier held/submerged by line position
+        self.isSubmergable = submergable # Flag denoting special positions in the line system such as loaders, deloaders, transport positions etc.
 
     def __repr__(self):
         return f"Bath(ID={self.bathUUID}, Name={self.name}, Distance={self.distanceToStart} m, currently has {self.containedCarrier} submerged)"
 
 class ManipulatorState(Enum):
+    """
+    Enumeration of manipulator states.
+    These are used for action decision logic within the simulation step.
+    """
     IDLE = "Idle" #Manipulator does not carry a carrier and has on tasking
     MOVING = "Moving" #manipulator is changing positions
     LIFTING = "Lifting" #manipulator is lifting a frame from a submerged position
@@ -28,6 +40,11 @@ class ManipulatorState(Enum):
     LOADING = "Loading" #manipulator is in a process of picking up from position bath[0] or is letting go of a carrier at baths[-1]
 
 class Manipulator:
+    """
+    Manipulator class definition.
+    Manipulator holds time definitions regarding operation speeds of lifting, putting down and moving the carriers.
+    Take note that acceleration is not taken into account
+    """
     # Constants
     LIFT_TIME = 16  # Time for lift in seconds (constant)
     SPEED = 0.6  # Speed of the manipulator (constant, 0.6 m/s)
@@ -36,17 +53,17 @@ class Manipulator:
     next_id = 1  # Class variable for auto-incrementing ID
 
     def __init__(self, reach, starting_position):
-        self.ManipUUID = Manipulator.next_id
+        self.ManipUUID = Manipulator.next_id # UUID
         Manipulator.next_id += 1
-        self.operatingRange = reach
-        self.liftTime = Manipulator.LIFT_TIME
-        self.movementSpeed = Manipulator.SPEED
-        self.position = starting_position
-        self.heldCarrier = None
-        self.distance_rail = Manipulator.calculate_rail_meters(self)
-        self.state = ManipulatorState.IDLE
-        self.target_position = None  # Track where the manipulator is moving
-        self.operation_timer = 0
+        self.operatingRange = reach # List of positions/operations which manipulator can service
+        self.liftTime = Manipulator.LIFT_TIME # Lift/put down timer
+        self.movementSpeed = Manipulator.SPEED # movement speed alongside the rail
+        self.position = starting_position # Position in which manipulators 'begins' the assembly line run
+        self.heldCarrier = None # Object of carrier with product to undergo varnish
+        self.distance_rail = Manipulator.calculate_rail_meters(self) # Distance in meters alongside the line
+        self.state = ManipulatorState.IDLE # see ManipulatorState
+        self.target_position = None  # Track where the manipulator is moving (ie. to which bath the manipulator needs to get to, in order to 'solve' next procedure step for carrier
+        self.operation_timer = 0 # tracks length of current manipulator state for relevant operations such as dripping
 
     def __repr__(self):
         return (f"Manipulator(ID={self.ManipUUID} is performing {self.state} at:"
@@ -54,6 +71,11 @@ class Manipulator:
                 f" services operations {self.operatingRange}, currently holds the {self.heldCarrier}")
 
     def move_to(self, new_position):
+        """
+        This function is called in simulation steps whenever new carrier task becomes available
+        :param new_position: target bath/destination which is desired to be reached
+        :return: side effects - modify the target position attribute, immediately calls the update_movement function
+        """
         if new_position in self.operatingRange:
             print(f"Manipulator {self.ManipUUID} moving from {self.position} to {new_position}")
             self.state = ManipulatorState.MOVING
@@ -63,9 +85,18 @@ class Manipulator:
             print(f"Manipulator {self.ManipUUID} cannot move to {new_position}, out of range.")
 
     def calculate_rail_meters(self):
+        """
+        :return: Distance in meters alongside the line rails given the distance listed for bath above which manipulator 'begins' operations
+        """
         return baths[self.position].distanceToStart
 
     def update_movement(self):
+        """
+        Primary movement function, called in each time step for every moving manipulator during simulation step.
+        Modifies distance_rail in a desired detection and handles collisions by moving idle manipulators or suspending operations when no other solution is
+        available.
+        :return: side effects - changes the distance_rail parameter, updates position/bath index where appropriate, handles collision detection
+        """
         if self.state == ManipulatorState.MOVING and self.target_position is not None:
             target_distance = baths[self.target_position].distanceToStart
 
@@ -104,9 +135,13 @@ class Manipulator:
             if self.distance_rail == target_distance:
                 self.position = self.target_position
                 self.operation_timer = 0
-                #self.state = ManipulatorState.IDLE
+
 
     def load_into_line(self):
+        """
+        Called in simulation step to handle initial carrier processing from the loader into the varnish line.
+        :return: side effect - initiates movement for manipulator responsible for 'loading' a carrier into varnishing line
+        """
         carrier = baths[self.position].containedCarrier
         carrier.get_current_step().completed = True
         carrier.currentStepIndex += 1
@@ -116,11 +151,19 @@ class Manipulator:
         self.move_to(carrier.get_current_step().bathID)
 
     def dismount_carrier(self):
+        """
+        Initiates lowering of the carriers
+        """
         print(f"Manip {self.ManipUUID} offloading payload into {baths[self.target_position]}")
         self.state = ManipulatorState.SUBMERGING
         self.operation_timer = 0
 
     def lower_carrier(self):
+        """
+        Handles the process of a time dependent carrier lowering.
+        Updates the carrier position/relation when appropriate and frees the manipulator
+        for further tasking.
+        """
         self.operation_timer += 1
 
         if self.operation_timer >= self.LIFT_TIME:
@@ -133,6 +176,9 @@ class Manipulator:
             self.state = ManipulatorState.IDLE
 
     def mount_carrier(self):
+        """
+        Initiates the process of lifting carrier from bath.
+        """
         print(f"Manip {self.ManipUUID} loading payload from {baths[self.target_position]}, dripping expected")
         self.operation_timer = 0
         bath = baths[self.target_position]
@@ -142,6 +188,10 @@ class Manipulator:
 
 
     def lift_carrier(self):
+        """
+        Handles the simulation of lifting the carrier from a bath, after the submerge time is fulfilled.
+        When the lifting is completed, switches the states over to the dripping phase.
+        """
         self.operation_timer += 1
 
         if self.operation_timer >= self.LIFT_TIME:
@@ -156,6 +206,9 @@ class Manipulator:
             print(f"Manip {self.ManipUUID} loaded payload from {baths[self.target_position]}, dripping to commence")
 
     def drip_carrier(self):
+        """
+        Handles the dripping timeout and then sets manipulator moving towards next step in the process.
+        """
         self.operation_timer += 1
 
         if self.operation_timer >= self.heldCarrier.get_current_step().dripTime:
@@ -164,9 +217,10 @@ class Manipulator:
             self.move_to(self.heldCarrier.get_current_step().bathID)
 
 
-
-
 class RecipeStep:
+    """
+    Definition of a procedure component defined by target bath and required times.
+    """
     DRIP_TIME = 20 # set to constant for now
     next_id = 0
     def __init__(self, bid, submersion_time):
@@ -181,6 +235,10 @@ class RecipeStep:
         return f"RecipeStep(Bath: {self.bathID}, Submersion: {self.submersionTime}s, Drip: {self.dripTime}s, Completed: {self.completed})"
 
 class RecipeTemplate:
+    """
+    Template responsible for instantiation of
+    procedure lists for carriers.
+    """
     def __init__(self, name, step_definitions):
         self.name = name  # Name of the recipe template
         self.step_definitions = step_definitions  # List of (bath_id, submersion_time) tuples
@@ -192,6 +250,10 @@ class RecipeTemplate:
 
 
 class Recipe:
+    """
+    Master Recipe definition.
+    Individual steps are given as list of operations (see RecipeStep)
+    """
     next_id = 1  # Class variable for auto-incrementing ID
     def __init__(self, name, operations):
         self.recpUUID = Recipe.next_id  # Unique identifier for the recipe
@@ -204,15 +266,22 @@ class Recipe:
 
 
 class CarrierState(Enum):
-    UNSERVICED = "Unserviced"
-    TO_BE_LOADED = "Loading needed"
-    BATHING = "Bathing"
-    BATH_COMPLETED = "Completed bath, dripping required"
-    BATH_SERVICED = "Manipulator tasked for dripping"
-    SERVICED = "In transit"
-    DRIPPING = "Dripping progress"
+    """
+    Definition of possible carrier states, together with manipulator states,
+    they dictate the simulation decision logic
+    """
+    UNSERVICED = "Unserviced" # Carrier is not yet loaded into varnish line
+    TO_BE_LOADED = "Loading needed" # Carrier received manipulator tasking
+    BATHING = "Bathing" # Carrier is submerged in a bath
+    BATH_COMPLETED = "Completed bath, dripping required" # required process line finish
+    BATH_SERVICED = "Manipulator tasked for dripping" # Manipulator has been assigned to completed bath time and is about to be lifted and dripped
+    SERVICED = "In transit" #
+    DRIPPING = "Dripping progress" # Carrier is currently being dripped
 
 class Carrier:
+    """
+    Definition of carriers 'carrying' products for varnish.
+    """
     next_id = 1
     def __init__(self, procedure):
         self.carUUID = Carrier.next_id  # Unique identifier for the recipe
@@ -226,10 +295,18 @@ class Carrier:
         return f"Carrier(ID={self.carUUID}, Current Step: {self.currentStepIndex},state {self.state} ,Recipe: {self.requiredProcedure.name})"
 
     def get_current_step(self):
-        """Returns the current recipe step."""
+        """
+        Returns the current recipe step.
+        i.e. function facilitates retrieval of current RecipeStep based on the progression
+        of the manufacturing process
+        """
         return self.requiredProcedure.executionList[self.currentStepIndex]
 
     def update_bathe_timer(self):
+        """
+        Called by the simulation steps to update timers on submerged carriers, checking whether
+        the process is finished or not
+        """
         if self.state == CarrierState.BATHING:
             self.operation_timer += 1
 
@@ -240,9 +317,16 @@ class Carrier:
             raise RuntimeError("ERROR: UNEXPECTED STATE")
 
 
-
+"""
+In this section of the code, input parameters of the code are entered and 
+then processed by object constructors.
+"""
 ### Data & condition definition
 
+"""
+Specification of the line baths and distances.
+Indexes of baths are assigned automatically based on the input order.
+"""
 bathData = [
     ("Vstup do linky", 0, False), # index 0
     ("Horký oplach - ponor", 2752, True),
@@ -270,6 +354,9 @@ bathData = [
     ("Výstup z linky", 60000, False) # index 23
 ]
 
+"""
+Specifies desired manipulators, their assigned range, and starting position.
+"""
 manipData = [
     ([0,1,2,3,4,5], 0 ),
     ([4,5,6,7,8,9,10],  5 ),
@@ -278,6 +365,11 @@ manipData = [
     ([17,18,19,20,21,22,23], 18 )
 ]
 
+"""
+Defines individual recipes which need to be processed during the assembly line run. 
+Take note that the name definition is of no consequence and just helps to navigate the printed outputs. 
+The definitions of individual steps is a list of tuple pairs position(bathID) <-> submerge time.  
+"""
 recipe_template1 = RecipeTemplate("Test1", [(0, 0), (5, 1), (10, 3),  (12,5), (17,3), (23, 0)])
 recipe_template2 = RecipeTemplate("Test2", [(0, 0), (5, 4), (10, 3), (12,5), (17,3), (23, 0)])
 recipe_template3 = RecipeTemplate("Test3", [(0, 0), (5, 4), (10,2), (12,5) ,(17, 3), (23, 0)])
@@ -285,8 +377,11 @@ recipe_template4 = RecipeTemplate("Test4", [(0,0),(4,50),(8,60),(13,13),(17,10),
 
 
 ### Collection Instantiation & readback
+"""
+Object instantiation is handled in this block.
+"""
 baths = [
-    Bath(name, distance / 1000, submergable=flag)  # convert to m
+    Bath(name, distance / 1000, submergable=flag)  # converts to m from original measurement unit
     for name, distance, flag in bathData
 ]
 
@@ -296,12 +391,19 @@ manipulators = [
     for reach, startingPosition in manipData
 ]
 
+"""
+Carrier definition corresponds to the 'list' of carriers/products which need to be serviced (and their accompanying procedure).
+This is then converted to a stack data structure under the FIFO ruleset.
+"""
 carrier_definition = [Carrier(recipe_template1.create_instance()),Carrier(recipe_template4.create_instance()),Carrier(recipe_template2.create_instance()),Carrier(recipe_template3.create_instance()),Carrier(recipe_template1.create_instance())]
 carriers_to_move = len(carrier_definition)
 work_order = deque(list(reversed(carrier_definition)))
 finished_carriers = deque()
 
-
+"""
+Code runs this function before proceeding to the simulation step. 
+Terminates if the configuration is unsolvable.
+"""
 def validate_work_order(manipulator_list, workorder_definition):
     # Map of which manipulators can reach which baths
     reachable_positions = {}
@@ -344,6 +446,10 @@ def validate_work_order(manipulator_list, workorder_definition):
 
 validate_work_order(manipulators,carrier_definition)
 
+
+"""
+Auxiliary printing functions
+"""
 def print_collection(collection):
     for item in collection:
         print(item)
@@ -359,6 +465,10 @@ provide_states()
 
 ### non object function definitions
 def move_manipulators():
+    """
+    In this function, for each manipulator in a line, a state is checked
+    and a corresponding function is called to update and/or switch operations.
+    """
     for manipulator in manipulators:
         if manipulator.state == ManipulatorState.MOVING:
             manipulator.update_movement()
@@ -386,6 +496,11 @@ def move_manipulators():
 
 
 def check_baths():
+    """
+    In this function, each bath is checked against its respective manipulator operating range twice.
+    First, whether a loader has a new carrier available, secondly, whether carrier is ready to be lifted and proceed to a new step.
+    Furthermore,  bathing timers are updated from this function call.
+    """
     for manipulator in manipulators:
         for bath in baths:
             if bath.bathUUID in manipulator.operatingRange and bath.containedCarrier and bath.containedCarrier.state == CarrierState.UNSERVICED and manipulator.state == ManipulatorState.IDLE:
@@ -423,6 +538,20 @@ def update_simulation():
     check_baths()
 
 ### Simulation
+"""
+Simulation step of the program. 
+The primary simulation loop first handles initial and exit stack states,
+the loop is popping new carrier into a line every time the first slot of the line is available, until there are
+carriers to be processed.
+
+Finally the update_simulation function is called which by extension refers to check_baths and move_manipulators functions.
+As such, on every simulation loop iteration (which by design corresponds to one second) every manipulator and bath is checked for potential
+task allocations and status updates. 
+
+Choice of the time unit is mostly arbitrary, but changing it would require recalculating (or adding a dynamic mechanism for doing so) relevant datum parameters. 
+Since each validation is automatic, the overhead on manipulator assignments is very low. 
+It is up to debate, whether the approach isn't "too greedy" from the optimization perspective. 
+"""
 is_work_order_done = False
 is_work_order_processed = False
 step_counter = 0 # one step is equal to one second
@@ -453,20 +582,24 @@ while not is_work_order_done:
         provide_states()
         print("Workorder processed successfully!")
 
+        if len(deque_times) > 1:
+            time_diffs = [deque_times[i] - deque_times[i - 1] for i in range(1, len(deque_times))]
+            avg_time_between = sum(time_diffs) / len(time_diffs)
+        else:
+            avg_time_between = 0  # Default to 0 if there aren't enough values
+
+
+        print(
+            f"Whole cycle completed in {step_counter}s, average time between carrier dequeing is {avg_time_between:.2f}s")
+        print("Loader state: " + str(work_order))
+        print("Off loader state: " + str(finished_carriers))
+
     #overflow control
     if step_counter > 10000:
         is_work_order_done = True
         provide_states()
         print(carriers_to_move, len(finished_carriers))
         print("Simulation exceeds safe runtime, terminating")
+        print("This indicates some unexpected error")
 
-if len(deque_times) > 1:
-    time_diffs = [deque_times[i] - deque_times[i - 1] for i in range(1, len(deque_times))]
-    avg_time_between = sum(time_diffs) / len(time_diffs)
-else:
-    avg_time_between = 0  # Default to 0 if there aren't enough values
 
-print("Primary run completed")
-print(f"Whole cycle completed in {step_counter}s, average time between carrier dequeing is {avg_time_between:.2f}s")
-print("Loader state: " + str(work_order))
-print("Off loader state: " + str(finished_carriers))
