@@ -1,8 +1,8 @@
 from enum import Enum
 from collections import deque, defaultdict
-import math
-
-
+"""
+Code mimics the 
+"""
 ### Object definition
 class Bath:
     next_id = 0  # Class variable for auto-incrementing ID
