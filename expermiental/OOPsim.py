@@ -80,3 +80,31 @@ def assign_baths_to_manipulators():
         start_index = end_index
 
     return manipulators, baths  # Return the updated manipulators and baths
+
+# Calculate travel time between baths based on distance and acceleration model
+def travel_time(distance):
+    """
+    Calculates the travel time based on the distance between two baths, considering acceleration and deceleration.
+    """
+    distance = distance / 1000  # Convert distance to kilometers
+    v_max = 1  # Maximum speed in m/s
+    t_acc = 2  # Acceleration time in seconds
+    a = v_max / t_acc  # Acceleration value
+    s1 = 0.5 * a * t_acc ** 2  # Distance covered during acceleration
+    s3 = s1  # Same distance for deceleration
+
+    # If the distance is greater than the sum of acceleration and deceleration distances
+    if distance > (s1 + s3):
+        s2 = distance - (s1 + s3)  # Constant speed travel
+        t2 = s2 / v_max
+        t_acc_time = t_acc  # Time spent accelerating
+        t_dec_time = t_acc  # Time spent decelerating
+    else:
+        # If the distance is smaller than the sum of acceleration and deceleration distances
+        t_acc_time = (2 * distance / a) ** 0.5  # Time for acceleration and deceleration
+        t2 = 0  # No constant speed phase
+        t_dec_time = t_acc_time  # Symmetric deceleration time
+
+    # Total time is sum of all phases
+    total_time = t_acc_time + t2 + t_dec_time
+    return total_time
