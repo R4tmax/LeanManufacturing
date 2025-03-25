@@ -188,3 +188,16 @@ def synchronize_operations(manipulators):
             data["operations"][0] = f"Waiting until {max_full_time} s"  # Log the waiting period
         data["full_time"] = max_full_time  # Update full time to match
     return max_full_time, len(manipulators) * max_full_time
+
+# Print out the operation timeline for each manipulator
+def print_operations(manipulators, max_full_time):
+    """
+    Prints the operation timeline for each manipulator and the cycle and takt times.
+    """
+    for manip, data in manipulators.items():
+        print(f"\nManipulator: {manip}")
+        for t, op in sorted(data["operations"].items()):
+            print(f"{round(t, 2):>6} s → {op}")  # Print time and operation
+    print("\nCycle time:", len(manipulators) * max_full_time)  # Print total cycle time
+    print("Takt time:", max_full_time)  # Print takt time
+
