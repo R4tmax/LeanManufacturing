@@ -132,3 +132,20 @@ def process_immersion(bath, data, time):
     time += 16  # Additional time for immersion process
     data["operations"][time] = f"Time in {bath}"  # Log the time spent in bath
     return time
+
+def process_removal(bath, data, time, is_last):
+    """
+    Handles removal and draining operations.
+    """
+    if not is_last:
+        # If not the last bath, handle removal and draining
+        time += baths[bath]["immersion_time"]  # Add immersion time
+        data["operations"][time] = f"Removal from {bath}"  # Log removal
+        time += 16  # Additional time for removal
+        data["operations"][time] = f"Draining after {bath}"  # Log draining start
+        time += baths[bath]["drain_time"]  # Add drain time
+    else:
+        # If it is the last bath, just remove without draining
+        data["operations"][time] = f"Removal from {bath}"
+        time += 16  # Additional time for removal
+    return time
