@@ -201,6 +201,7 @@ def print_operations(manipulators, max_full_time):
     print("\nCycle time:", len(manipulators) * max_full_time)  # Print total cycle time
     print("Takt time:", max_full_time)  # Print takt time
 
+
 # Main script execution
 manipulators, baths = assign_baths_to_manipulators()
 simulate_manipulators(manipulators, baths)  # Simulate manipulator operations
